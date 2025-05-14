@@ -506,7 +506,174 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 给transformer使用的数据集data_TR.json的处理也是一样的,只是由于数据过大,使用了多进程加速获取数据集,以及后续将json格式转换jsonl以支持流式加载 (详见 Get_trainingset_huge.py)   样本数为4989523
 ### 2.遗传算法的实现
 
+岛屿模型 差分进化 传统遗传算法
+
+使用了cuda和多进程加速训练
+使用早停法
+
+特征设计  根据卡牌的记分方式来决定需要使用的特征
+
+
+                features = [
+                    score,  # 当前得分
+                    removal_length,  # 移除长度
+                    new_length,  # 新长度
+                    future_score,  # 未来得分
+                    sum_A,  # A的元素总和
+                    intersection_count,  # B与A的交集数量
+                ]
+
+这里有新意的是future_score
 
 
 
+
+核心函数  
+def evaluate_genome(genome, num_rounds=1000, seed_base=111):
+#种子是为了...
+    import torch
+    from AI_algorithm.tool.tool import calculate_score_by_strategy
+
+    # 检查并设置 GPU 可用性
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+    # 将基因组转换为 GPU 张量
+    # genome_tensor = torch.tensor(genome, dtype=torch.float32, device=device)
+
+    # 批处理大小
+    batch_size = 32
+
+    # 预分配结果数组
+    total_scores = torch.zeros(num_rounds, dtype=torch.float32, device=device)
+
+    # 批量处理评估任务
+    for batch_start in range(0, num_rounds, batch_size):
+        batch_end = min(batch_start + batch_size, num_rounds)
+        batch_size_actual = batch_end - batch_start
+
+
+        # 为当前批次生成所有A和B
+        batch_A = []
+        batch_B = []
+        for _ in range(batch_size_actual):
+        #种子
+            A, B = deal_cards(seed=seed_base + batch_start + _)
+            batch_A.append(A)
+            batch_B.append(B)
+
+        # 并行评估批次使用GPU
+        batch_scores = torch.zeros(batch_size_actual, dtype=torch.float32, device=device)
+
+        for j in range(batch_size_actual):
+
+#GA_Strategy  获取当前策略
+            strategy = GA_Strategy(genome, batch_A[j], batch_B[j])
+
+            #计算策略对应的得分
+            batch_scores[j] = calculate_score_by_strategy(batch_A[j], batch_B[j], strategy)
+
+        # 复制批次得分到总得分
+        total_scores[batch_start:batch_end] = batch_scores
+
+    # 计算最终平均分(平均)
+    mean_score = torch.mean(total_scores).item()
+
+    print(f"基因组平均得分: {mean_score}")
+
+    return mean_score  # 返回平均得分
+
+
+
+def GA_Strategy(genome, A, B):
+    """
+    使用基因组评估所有可能的B牌处理顺序，返回最高得分和相应策略
+
+    参数：
+    - genome: 基因组权重 (NumPy数组或PyTorch张量)
+    - A: A玩家的牌
+    - B: B玩家的牌
+
+    返回：
+    - strategy: 最佳策略
+    """
+    import torch
+
+
+    # 检查CUDA可用性并设置设备
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # 检查genome类型并转换为torch张量  python列表变为张量 移动到GPU计算
+    if isinstance(genome, torch.Tensor):
+        genome_tensor = genome.to(device)
+    else:
+        genome_tensor = torch.tensor(genome, dtype=torch.float32, device=device)
+
+
+
+    # 批量计算所有B牌的所有可能插入位置的特征
+    def compute_card_values_batch(A_copy, B, genome_tensor):
+        card_values = []
+
+        # 预先计算一些共用特征
+        sum_A = sum(A_copy)
+        A_set = set(A_copy)
+
+        for i, card in enumerate(B):
+            remaining_B = [B[j] for j in range(len(B)) if j != i]
+            remaining_B_set = set([card] + remaining_B)
+            intersection_count = len(remaining_B_set & A_set)
+
+            # 为所有可能的插入位置创建特征批次
+            all_features = []
+            all_positions = []
+
+
+            # 收集所有位置的特征
+            for pos in range(len(A_copy) + 1):
+                score, removal_length, new_length, match_found, new_A = simulate_insertion_tool(A_copy, card, pos)
+                future_score = calculate_future_score(new_A, remaining_B)
+
+                features = [
+                    score,  # 当前得分
+                    removal_length,  # 移除长度
+                    new_length,  # 新长度
+                    future_score,  # 未来得分
+                    sum_A,  # A的元素总和
+                    intersection_count,  # B与A的交集数量
+                ]
+
+                all_features.append(features)
+                # 最佳插入位置
+                all_positions.append(pos)
+                # all_scores.append(score)
+                # all_new_As.append(new_A)
+
+            # 将所有特征转换为GPU张量并一次性计算
+            if all_features:
+                features_tensor = torch.tensor(all_features, dtype=torch.float32, device=device)
+                # 批量计算点积 (每个位置的评估值)
+                values = torch.matmul(features_tensor, genome_tensor)
+
+                # 找到最佳位置
+                best_idx = torch.argmax(values).item()
+                best_value = values[best_idx].item()
+                best_pos = all_positions[best_idx]
+                # best_score = all_scores[best_idx]
+                # best_new_A = all_new_As[best_idx]
+
+                card_values.append((i, best_value, best_pos))
+
+        return card_values
+
+    # 计算卡值
+    card_values = compute_card_values_batch(A.copy(), B, genome_tensor)
+
+    # 根据评估值对卡进行排序 x[1] 就是 best_value ，即每张牌的最佳评估值
+    card_values.sort(key=lambda x: x[1], reverse=True)
+
+    # 根据排序后的顺序生成策略
+    strategy = [(card_idx, pos) for card_idx, _, pos in card_values]
+
+    return strategy
 

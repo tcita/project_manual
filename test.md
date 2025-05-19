@@ -410,7 +410,11 @@ A 的状态在每次插入后都会改变，并且列表内容本身复杂，而
 代理模型（surrogate modeling）:
 在这个过程中，这个Recursive_StrategyAndScore算法生成结果数据，然后将这些数据用作训练集来训练AI模型。训练完成后，AI模型学习到了原始算法的行为模式，可以在允许一定的误差的情况下预测该算法在新输入上的输出结果，而无需实际运行原始算法。 这就是本文着重要讨论的内容
 
-# 2. AI 技术细节
+# 第二部分  AI 技术细节
+
+python版本 
+
+
 我选择了transformer和遗传算法作为ai模型 
 
 使用遗传算法的原因其一是这个决策序列空间是巨大的，并且每一步的决策都依赖于上一步的结果。遗传算法是擅长在复杂、高维、非连续或目标函数难以微分的搜索空间中寻找最优解。  其二是它相对容易实现,而且它的计算成本低,可以快速得到结果。
@@ -504,33 +508,143 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 
 
 给transformer使用的数据集data_TR.json的处理也是一样的,只是由于数据过大,使用了多进程加速获取数据集,以及后续将json格式转换jsonl以支持流式加载 (详见 Get_trainingset_huge.py)   样本数为4989523
+
+
+
+
 ### 2.遗传算法的实现
 
-岛屿模型 差分进化 传统遗传算法
+
 
 使用了cuda和多进程加速训练
 使用早停法
 
-特征设计  根据卡牌的记分方式来决定需要使用的特征
+
+遗传算法中策略的生成步骤:
+
+遗传算法的实际参数:
+    pop_size=1000 #每一代种群中个体的数量
+    generations=30
+    num_rounds=500 # 每个个体的评估轮次
+    elitism_ratio=0.1 #每一代中直接保留到下一代的最优个体的比例
+    tournament_size=3 # 锦标赛规模:随机选取3个编为一组,选取其中最佳的基因作为父代
+    evolution_methods=['standard', 'island', 'de'] #岛屿模型 差分进化 传统遗传算法
+  
+    #早停相关参数
+    early_stop_generations=5
+    early_stop_threshold=0.01
+
+
+    genome = genetic_algorithm(pop_size,generations, num_rounds, elitism_ratio, tournament_size, evolution_methods, early_stop_generations, early_stop_threshold)  # 运行遗传算法获取最佳基因组
+
+代码根据了执行结果优化
+Total Execution Time: 6175.03 seconds
+Completed Generations: 6 of 30
+
+
+(在此例子中使用不同的进化方法改善的并不明显 但是为了实现一个完成度较高的算法  我们这里保留它)
+各进化方法性能分析:
+standard方法: 未被使用
+island方法: 未被使用
+de方法: 平均适应度=47.80, 最大适应度=47.80, 改进率=0.01%, 使用次数=5
+
+Genome model :  [1.5939234785836462, -0.5025118249479125, -0.5296184457165617, 1.4105017073059225, 0.7851904853961442, -0.3300074485121268]
+
+
+
+基因组特征权重:
+当前得分: 1.5939
+移除长度: -0.5025
+新长度: -0.5296
+未来得分: 1.4105
+A元素总和: 0.7852
+B与A交集数量: -0.3300
+### 特征1: 当前得分 (1.5939)
+这个权重非常高且为正值，表明算法非常重视当前移动能够直接带来的得分。这是符合直觉的，因为游戏的最终目标就是获得高分。
+
+### 特征2: 移除长度 (-0.5025)
+这个权重为负值，表明算法倾向于避免移除过多的元素。这可能是因为保留更多元素可以为未来的移动提供更多可能性。
+
+### 特征3: 新长度 (-0.5296)
+同样为负值，表明算法倾向于保持序列较短。这可能是因为较短的序列更容易管理，也更容易在未来找到匹配。
+
+### 特征4: 未来得分 (1.4105)
+这个权重也很高且为正值，仅次于当前得分。这表明算法非常重视移动对未来可能得分的影响，具有很强的前瞻性。
+
+### 特征5: A的元素总和 (0.7852)
+中等正值，表明算法认为保持A中元素总和较高是有利的。这可能是因为更高的总和提供了更多的组合可能性。
+
+### 特征6: B与A的交集数量 (-0.3300)
+小负值，表明算法略微倾向于避免B与A有太多交集。这可能是为了保持多样性，避免重复元素。
+
+特征设计  根据卡牌的记分方法来决定需要使用的特征
 
 
                 features = [
-                    score,  # 当前得分
-                    removal_length,  # 移除长度
-                    new_length,  # 新长度
+                    score,  # 当前策略的子集得分
+                    removal_length,  # 匹配的移除长度
+                    new_length,  # A由于插入操作得到的新长度
                     future_score,  # 未来得分
                     sum_A,  # A的元素总和
                     intersection_count,  # B与A的交集数量
                 ]
 
+
+遗传算法的genome 是一个包含6个浮点数的列表。这6个数字代表了评估游戏决策时所用到的6个特征的权重
+
+
+
 这里有新意的是future_score
+由于B中的牌数量较少(0~3) 所以可以根据这个特点进行启发式算法,  这里的future_score意思是  由于每次要从B中选一张插入A,而且每次的选取,插入都可能造成A的变化,然后导致后续的选取,插入步骤的最优得分策略变化  future_score指每次选取插入这个操作之后,剩余牌可能的得分  这是一个很重要的特征  它动态的评估了未来的卡牌状态  就好像国际象棋玩家会考虑某一步对以后的棋子策略带来的影响一样
+
+
+这个启发式函数的思路是这样的,从B中的牌抽取一张插入A时,同时考虑在这次选取插入操作实现之后:
+
+1 当如果 A 和 B 没有任何重复元素,那么future_score是0
+
+2 如果没有剩余的B玩家的牌,那么future_score是0
+
+3 如果B中只剩下一张牌,检查这张牌和A是否有交集 如果有  则调用get_best_insertion_score计算得分作为future_score,如果没有那么future_score是0
+
+由于这个计算关注的是B中的元素数以及B中某张特定牌与A的交集,无关顺序 所以是可以使用缓存的
+
+
+
+当已经从B中选取一张牌并移出后,判断将来可能产生的得分  
+
+
+def calculate_future_score(A, remaining_B):
+    # 缓存键
+    cache_key = (tuple(A), tuple(remaining_B))
+
+    # 检查缓存
+    if cache_key in _future_score_cache:
+        return _future_score_cache[cache_key]
+
+    future_score = 0  # 初始化未来得分
+    if len(remaining_B) == 0:
+        return future_score  # 如果没有剩余的B玩家的牌，返回0
+    if not set(A) & set(remaining_B):  # 如果 A 和 B 没有任何重复元素
+        return future_score
+    # 复制A玩家的牌以便模拟
+    simulated_B = remaining_B.copy()
+
+    if len(simulated_B) == 1:
+        card_of_B = simulated_B[0]  # 获取最后一张B玩家的牌
+        matched = card_of_B  in A  # 判断是否能匹配
+        if not matched:
+            return future_score  # 如果不能匹配，返回0
+        else:
+            _, score = get_best_insertion_score(A, card_of_B)
+            return score
+
 
 
 
 
 核心函数  
 def evaluate_genome(genome, num_rounds=1000, seed_base=111):
-#种子是为了...
+#种子是为了使用相同的A,B进行评估 避免引入其他变量
     import torch
     from AI_algorithm.tool.tool import calculate_score_by_strategy
 

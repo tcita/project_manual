@@ -366,16 +366,16 @@ used_indices : 这是一个字典 ，用于跟踪 original_indices 中每个值�
 
     return max_score, best_moves
 
-首先进行一些粗略的数学估计:
+首先进行一些数学估计:
 
-时间复杂度分析:
+时间复杂度分析(不够精确  我要更细致的分析和更紧的上界  要结合得到的图像逆向分析...):
 
-对于 B 中的每一个元素，它尝试在当前的 A 的所有可能位置插入，然后递归处理剩余的元素。假设 |B| = n，|A| = m，那么在第一步有 n 种元素选择，每种元素有 m+1 个插入位置，总共有 n * (m+1) 种可能。第二步有 n-1 个元素，插入位置变为 m+2，依此类推。大致的复杂度是 O(n!⋅(m+n)!/m!) 量级，非常高。(但由于每次插入后A的长度的改变并不确定, 可能没有匹配导致的长度加一  也可能产生了匹配,移除了2~len(A)个元素   所以这个估计并不是精确的,但是时间复杂度依然是指数级的)
+对于 B 中的每一个元素，它尝试在当前的 A 的所有可能位置插入，然后递归处理剩余的元素。假设 |B| = n，|A| = m，那么在第一步有 n 种元素选择，每种元素有 m+1 个插入位置，总共有 n * (m+1) 种可能。第二步有 n-1 个元素，插入位置变为 m+2，依此类推。大致的复杂度是 O(n!⋅(m+n)!/m!) 量级，非常高。(但由于每次插入后A的长度的改变并不确定, 可能没有匹配导致的长度加一  也可能产生了匹配,移除了2~len(A)个元素   所以这个估计并不是精确的,而且实际情况下匹配本身也会带来不少的性能消耗,所以时间复杂度依然是指数级的)
 
 
 结合具体的输入数据分析穷举的数据量:
 
-计算穷举当A,B没有给定时,所有的将B插入A后的所有可能性
+计算穷举当A,B没有给定且不发生任何匹配消除时,所有的将B插入A后的所有可能性
 
 如果仅考虑将B(长度为3的数组)中的牌插入A(长度为6的数组)里,不考虑A,B上有点数,求解有多少中插入的可能,那么这可以看作是一个多重集排列问题:从{A,A, A,A, A,A, B,B,B}构成的集合中不放回的拿出元素,全部放到一个一维数组里,能构成多少种长度为9的不同的数组?   
 所以是C(9,6)*C(3,3)=C(9,6)
@@ -390,7 +390,7 @@ used_indices : 这是一个字典 ，用于跟踪 original_indices 中每个值�
 
 所以这是所有的可能插入可能  C(9,3)*P(13,6)*13^3=228,012,744,960 
 
-这是一个非常大的数据量  就算一个样本只占10B  磁盘上的数据也超过2000GB   (这是一个上界,就如前面所说,每次插入可能导致A数组变动,从而导致之后的决策发生改变,这里只考虑了不发生匹配的情况,导致了有些插入可能是不合法的,但是可以明确的是,实际的穷举数据是这个大约2280GB的数据的子集)
+这是一个非常大的数据量  就算一个样本只占10B  磁盘上的数据也超过2000GB   (这是一个上界,就如前面所说,每次插入可能导致A数组变动,从而导致之后的决策发生改变,这里只考虑了不发生匹配的情况,导致了有些插入可能是不合法的,但是可以明确的是,实际的穷举数据是巨大的)
 
 这导致了可能的决策空间非常大,所以在编程时很难使用缓存技术来加速,因为缓存难以命中
 
@@ -404,7 +404,7 @@ A 的状态在每次插入后都会改变，并且列表内容本身复杂，而
 
 剪枝/启发式方法:
 
-基于对于simulate_insertion_tool的匹配规则的理解,的确可以做出优化,来跳过一些递归分支,  这部分留在AI模型讨论
+基于对于simulate_insertion_tool的匹配规则的理解,的确可以做出启发式方法优化,来跳过一些递归分支,  这部分留在AI模型讨论
 
 
 代理模型（surrogate modeling）:
@@ -412,7 +412,9 @@ A 的状态在每次插入后都会改变，并且列表内容本身复杂，而
 
 # 第二部分  AI 技术细节
 
-python版本 
+python版本 3.12.9
+
+使用Anaconda配置了cuda环境
 
 
 我选择了transformer和遗传算法作为ai模型 
@@ -516,15 +518,11 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 
 
 
-使用了cuda和多进程加速训练
-使用早停法
-
-
 遗传算法中策略的生成步骤:
 
 遗传算法的实际参数:
     pop_size=1000 #每一代种群中个体的数量
-    generations=30
+    generations=30 #完整迭代周期重复次数
     num_rounds=500 # 每个个体的评估轮次
     elitism_ratio=0.1 #每一代中直接保留到下一代的最优个体的比例
     tournament_size=3 # 锦标赛规模:随机选取3个编为一组,选取其中最佳的基因作为父代
@@ -537,9 +535,14 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 
     genome = genetic_algorithm(pop_size,generations, num_rounds, elitism_ratio, tournament_size, evolution_methods, early_stop_generations, early_stop_threshold)  # 运行遗传算法获取最佳基因组
 
+
+    这是一个训练后得到的基因 
+    Genome model :  [1.5939234785836462, -0.5025118249479125, -0.5296184457165617, 1.4105017073059225, 0.7851904853961442, -0.3300074485121268]
+
+
+
 代码根据了执行结果优化
-Total Execution Time: 6175.03 seconds
-Completed Generations: 6 of 30
+
 
 
 (在此例子中使用不同的进化方法改善的并不明显 但是为了实现一个完成度较高的算法  我们这里保留它)
@@ -548,7 +551,7 @@ standard方法: 未被使用
 island方法: 未被使用
 de方法: 平均适应度=47.80, 最大适应度=47.80, 改进率=0.01%, 使用次数=5
 
-Genome model :  [1.5939234785836462, -0.5025118249479125, -0.5296184457165617, 1.4105017073059225, 0.7851904853961442, -0.3300074485121268]
+
 
 
 
@@ -560,7 +563,7 @@ Genome model :  [1.5939234785836462, -0.5025118249479125, -0.5296184457165617, 1
 A元素总和: 0.7852
 B与A交集数量: -0.3300
 ### 特征1: 当前得分 (1.5939)
-这个权重非常高且为正值，表明算法非常重视当前移动能够直接带来的得分。这是符合直觉的，因为游戏的最终目标就是获得高分。
+这个权重非常高且为正值，表明算法非常重视当前移动能够直接带来的得分
 
 ### 特征2: 移除长度 (-0.5025)
 这个权重为负值，表明算法倾向于避免移除过多的元素。这可能是因为保留更多元素可以为未来的移动提供更多可能性。
@@ -598,7 +601,10 @@ B与A交集数量: -0.3300
 由于B中的牌数量较少(0~3) 所以可以根据这个特点进行启发式算法,  这里的future_score意思是  由于每次要从B中选一张插入A,而且每次的选取,插入都可能造成A的变化,然后导致后续的选取,插入步骤的最优得分策略变化  future_score指每次选取插入这个操作之后,剩余牌可能的得分  这是一个很重要的特征  它动态的评估了未来的卡牌状态  就好像国际象棋玩家会考虑某一步对以后的棋子策略带来的影响一样
 
 
-这个启发式函数的思路是这样的,从B中的牌抽取一张插入A时,同时考虑在这次选取插入操作实现之后:
+其他的特征选取于simulate_insertion_tool的返回值  match_found和removal_length有重合,考虑到模型复杂度,它没有被作为特征
+
+
+这个计算future_score的启发式函数的思路是这样的,从B中的牌抽取一张插入A时,同时考虑在这次选取插入操作实现之后:
 
 1 当如果 A 和 B 没有任何重复元素,那么future_score是0
 
@@ -606,21 +612,11 @@ B与A交集数量: -0.3300
 
 3 如果B中只剩下一张牌,检查这张牌和A是否有交集 如果有  则调用get_best_insertion_score计算得分作为future_score,如果没有那么future_score是0
 
-由于这个计算关注的是B中的元素数以及B中某张特定牌与A的交集,无关顺序 所以是可以使用缓存的
 
-
-
-当已经从B中选取一张牌并移出后,判断将来可能产生的得分  
 
 
 def calculate_future_score(A, remaining_B):
-    # 缓存键
-    cache_key = (tuple(A), tuple(remaining_B))
-
-    # 检查缓存
-    if cache_key in _future_score_cache:
-        return _future_score_cache[cache_key]
-
+  
     future_score = 0  # 初始化未来得分
     if len(remaining_B) == 0:
         return future_score  # 如果没有剩余的B玩家的牌，返回0
@@ -643,59 +639,7 @@ def calculate_future_score(A, remaining_B):
 
 
 核心函数  
-def evaluate_genome(genome, num_rounds=1000, seed_base=111):
-#种子是为了使用相同的A,B进行评估 避免引入其他变量
-    import torch
-    from AI_algorithm.tool.tool import calculate_score_by_strategy
 
-    # 检查并设置 GPU 可用性
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
-    # 将基因组转换为 GPU 张量
-    # genome_tensor = torch.tensor(genome, dtype=torch.float32, device=device)
-
-    # 批处理大小
-    batch_size = 32
-
-    # 预分配结果数组
-    total_scores = torch.zeros(num_rounds, dtype=torch.float32, device=device)
-
-    # 批量处理评估任务
-    for batch_start in range(0, num_rounds, batch_size):
-        batch_end = min(batch_start + batch_size, num_rounds)
-        batch_size_actual = batch_end - batch_start
-
-
-        # 为当前批次生成所有A和B
-        batch_A = []
-        batch_B = []
-        for _ in range(batch_size_actual):
-        #种子
-            A, B = deal_cards(seed=seed_base + batch_start + _)
-            batch_A.append(A)
-            batch_B.append(B)
-
-        # 并行评估批次使用GPU
-        batch_scores = torch.zeros(batch_size_actual, dtype=torch.float32, device=device)
-
-        for j in range(batch_size_actual):
-
-#GA_Strategy  获取当前策略
-            strategy = GA_Strategy(genome, batch_A[j], batch_B[j])
-
-            #计算策略对应的得分
-            batch_scores[j] = calculate_score_by_strategy(batch_A[j], batch_B[j], strategy)
-
-        # 复制批次得分到总得分
-        total_scores[batch_start:batch_end] = batch_scores
-
-    # 计算最终平均分(平均)
-    mean_score = torch.mean(total_scores).item()
-
-    print(f"基因组平均得分: {mean_score}")
-
-    return mean_score  # 返回平均得分
 
 
 
@@ -790,4 +734,62 @@ def GA_Strategy(genome, A, B):
     strategy = [(card_idx, pos) for card_idx, _, pos in card_values]
 
     return strategy
+
+
+
+
+
+def evaluate_genome(genome, num_rounds=1000, seed_base=111):
+#种子是为了使用相同的A,B进行评估 避免引入其他变量
+    import torch
+    from AI_algorithm.tool.tool import calculate_score_by_strategy
+
+    # 检查并设置 GPU 可用性
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+    # 将基因组转换为 GPU 张量
+    # genome_tensor = torch.tensor(genome, dtype=torch.float32, device=device)
+
+    # 批处理大小
+    batch_size = 32
+
+    # 预分配结果数组
+    total_scores = torch.zeros(num_rounds, dtype=torch.float32, device=device)
+
+    # 批量处理评估任务
+    for batch_start in range(0, num_rounds, batch_size):
+        batch_end = min(batch_start + batch_size, num_rounds)
+        batch_size_actual = batch_end - batch_start
+
+
+        # 为当前批次生成所有A和B
+        batch_A = []
+        batch_B = []
+        for _ in range(batch_size_actual):
+        #种子
+            A, B = deal_cards(seed=seed_base + batch_start + _)
+            batch_A.append(A)
+            batch_B.append(B)
+
+        # 并行评估批次使用GPU
+        batch_scores = torch.zeros(batch_size_actual, dtype=torch.float32, device=device)
+
+        for j in range(batch_size_actual):
+
+#GA_Strategy  获取当前策略
+            strategy = GA_Strategy(genome, batch_A[j], batch_B[j])
+
+            #计算策略对应的得分
+            batch_scores[j] = calculate_score_by_strategy(batch_A[j], batch_B[j], strategy)
+
+        # 复制批次得分到总得分
+        total_scores[batch_start:batch_end] = batch_scores
+
+    # 计算最终平均分(平均)
+    mean_score = torch.mean(total_scores).item()
+
+    print(f"基因组平均得分: {mean_score}")
+
+    return mean_score  # 返回平均得分
 

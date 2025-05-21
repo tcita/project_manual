@@ -402,10 +402,17 @@ used_indices : 这是一个字典 ，用于跟踪 original_indices 中每个值�
 
 我们可以获取更紧的上界 这里使用了基于概率的统计数据分析(蒙特卡洛模拟)  对于当len(A)=6  len(B)=3 时 
 
-随机生成A,B  len(A)=6  len(B)=3   随机不放回的抽取B中的一张牌,随机插入到A中,重复2次调用simulate_insertion_tool直到B中没有元素,第二次调用是基于上一次改变后的A,B, 比如
+随机生成A,B  len(A)=6  len(B)=3   随机不放回的抽取B中的一张牌,随机插入到A中,重复2次调用simulate_insertion_tool直到B中没有元素,第二次调用是基于上一次改变后的A,B, 
 
-...
- _, _, new_length1, _, newA = simulate_insertion_tool(A, card, pos)
+{
+        A, B = get_A_and_B_random()
+
+        card = random.choice(B)
+
+        pos=random.randint(0,6)
+        
+        _, _, new_length1, _, newA = simulate_insertion_tool(A, card, pos)
+
         all_lengths1.append(new_length1)
 
 第一次改变后的A的长度期望 expected_value = sum(all_lengths1) /total_times
@@ -415,10 +422,15 @@ used_indices : 这是一个字典 ，用于跟踪 original_indices 中每个值�
         pos = random.randint(0, len(newA))
 
         _, _, new_length2, _, newA = simulate_insertion_tool(newA, card, pos)
+
         all_lengths2.append(new_length2)
+
 第二次改变后的A的长度期望 expected_value = sum(all_lengths2) / total_times
 
-获取函数的第三个返回值 以上过程重复20M次(total_times=20M) 进行统计, 编写代码运行 以下是结果:
+}
+
+
+获取函数的第三个返回值 以上过程重复20M次(total_times=20M) 进行统计, 编写代码运行 以下是我的结果:
 
 
 总共执行了 20M 次 simulate_insertion_tool 调用。
@@ -460,6 +472,7 @@ simulate_insertion_tool在每个循环中只调用两次是因为第一次插入
 
 
 优化尝试:
+
 动态规划:
 
 A 的状态在每次插入后都会改变，并且列表内容本身复杂，而且导致了难以找到重叠子问题,难以作为 DP 状态的键进行存储和查找, A 的动态的状态是问题所在。因此，动态规划 在这个问题的通用形式下很难实现。
@@ -468,7 +481,7 @@ A 的状态在每次插入后都会改变，并且列表内容本身复杂，而
 
 剪枝/启发式方法:
 
-基于对于simulate_insertion_tool的匹配规则的理解,的确可以做出启发式方法优化,来跳过一些递归分支,  这部分留在AI模型讨论
+基于对于simulate_insertion_tool的匹配规则的理解,的确可以做出启发式方法优化,来跳过一些递归分支, 我使用future_score 这个特征来实现   具体内容在遗传算法的实现中展开
 
 
 代理模型（surrogate modeling）:
@@ -483,6 +496,11 @@ A 的状态在每次插入后都会改变，并且列表内容本身复杂，而
 python版本 3.12.9
 
 使用Anaconda配置了cuda环境
+
+CPU: AMD Ryzen 9 5900HS(8 processing cores, 16 threads)
+GPU: NVIDIA GeForce RTX 3050 laptop  (Vram: 4G)
+
+
 
 
 我选择了transformer和遗传算法作为ai模型 
@@ -542,6 +560,7 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 
 所以现在有一个需要抉择的地方  对于这些长度不是严格为3的best_move 是应该跳过它们,还是填充它们到3? 跳过的话会丢失重要的内在关系吗?如果填充会反而引入噪声吗?  这需要结合训练出的模型的预测结果来判断究竟哪个好  我经过测试得出,填充更优,  这一部分的细节放在ai模型的评测中再详细讨论
 
+
 由于A,B是使用deal_cards_tool随机生成的,需要对数据集去重,可以使用python的set完成,接着需要详细检查数据的格式,异常处理 等 代码详见dedpu.py
 
 最后得出给遗传算法使用的数据集data_GA.json  样本数为10k 这是一个样本示例:
@@ -585,69 +604,6 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 ### 2.遗传算法的实现
 
 
-
-遗传算法中策略的生成步骤:
-
-遗传算法的实际参数:
-    pop_size=1000 #每一代种群中个体的数量
-    generations=30 #完整迭代周期重复次数
-    num_rounds=500 # 每个个体的评估轮次
-    elitism_ratio=0.1 #每一代中直接保留到下一代的最优个体的比例
-    tournament_size=3 # 锦标赛规模:随机选取3个编为一组,选取其中最佳的基因作为父代
-    evolution_methods=['standard', 'island', 'de'] #岛屿模型 差分进化 传统遗传算法
-  
-    #早停相关参数
-    early_stop_generations=5
-    early_stop_threshold=0.01
-
-
-    genome = genetic_algorithm(pop_size,generations, num_rounds, elitism_ratio, tournament_size, evolution_methods, early_stop_generations, early_stop_threshold)  # 运行遗传算法获取最佳基因组
-
-
-    这是一个训练后得到的基因 
-    Genome model :  [1.5939234785836462, -0.5025118249479125, -0.5296184457165617, 1.4105017073059225, 0.7851904853961442, -0.3300074485121268]
-
-
-
-代码根据了执行结果优化
-
-
-
-(在此例子中使用不同的进化方法改善的并不明显 但是为了实现一个完成度较高的算法  我们这里保留它)
-各进化方法性能分析:
-standard方法: 未被使用
-island方法: 未被使用
-de方法: 平均适应度=47.80, 最大适应度=47.80, 改进率=0.01%, 使用次数=5
-
-
-
-
-
-基因组特征权重:
-当前得分: 1.5939
-移除长度: -0.5025
-新长度: -0.5296
-未来得分: 1.4105
-A元素总和: 0.7852
-B与A交集数量: -0.3300
-### 特征1: 当前得分 (1.5939)
-这个权重非常高且为正值，表明算法非常重视当前移动能够直接带来的得分
-
-### 特征2: 移除长度 (-0.5025)
-这个权重为负值，表明算法倾向于避免移除过多的元素。这可能是因为保留更多元素可以为未来的移动提供更多可能性。
-
-### 特征3: 新长度 (-0.5296)
-同样为负值，表明算法倾向于保持序列较短。这可能是因为较短的序列更容易管理，也更容易在未来找到匹配。
-
-### 特征4: 未来得分 (1.4105)
-这个权重也很高且为正值，仅次于当前得分。这表明算法非常重视移动对未来可能得分的影响，具有很强的前瞻性。
-
-### 特征5: A的元素总和 (0.7852)
-中等正值，表明算法认为保持A中元素总和较高是有利的。这可能是因为更高的总和提供了更多的组合可能性。
-
-### 特征6: B与A的交集数量 (-0.3300)
-小负值，表明算法略微倾向于避免B与A有太多交集。这可能是为了保持多样性，避免重复元素。
-
 特征设计  根据卡牌的记分方法来决定需要使用的特征
 
 
@@ -662,6 +618,8 @@ B与A交集数量: -0.3300
 
 
 遗传算法的genome 是一个包含6个浮点数的列表。这6个数字代表了评估游戏决策时所用到的6个特征的权重
+
+
 
 
 
@@ -713,7 +671,7 @@ def calculate_future_score(A, remaining_B):
 
 def GA_Strategy(genome, A, B):
     """
-    使用基因组评估所有可能的B牌处理顺序，返回最高得分和相应策略
+    计算每一个插入位置的特征张量,并与它和基因张量做点积计算 得到这个位置的"评估值",并按照评估值从大到小排序
 
     参数：
     - genome: 基因组权重 (NumPy数组或PyTorch张量)
@@ -722,12 +680,12 @@ def GA_Strategy(genome, A, B):
 
     返回：
     - strategy: 最佳策略
-    """    
+    """
 
     # 检查CUDA可用性并设置设备
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # 检查genome类型并转换为torch张量  python列表变为张量 移动到GPU计算
+    # 检查genome类型并转换为torch张量
     if isinstance(genome, torch.Tensor):
         genome_tensor = genome.to(device)
     else:
@@ -739,23 +697,24 @@ def GA_Strategy(genome, A, B):
     def compute_card_values_batch(A_copy, B, genome_tensor):
         card_values = []
 
-        # 预先计算一些共用特征
+        #特征计算
         sum_A = sum(A_copy)
         A_set = set(A_copy)
 
+        #使用嵌套循环进行插入模拟  每一个插入位置都会计算6个特征
         for i, card in enumerate(B):
             remaining_B = [B[j] for j in range(len(B)) if j != i]
             remaining_B_set = set([card] + remaining_B)
+            #特征计算
             intersection_count = len(remaining_B_set & A_set)
 
-            # 为所有可能的插入位置创建特征批次
+            # 插入位置以及特征集合
             all_features = []
             all_positions = []
 
-
-            # 收集所有位置的特征
             for pos in range(len(A_copy) + 1):
-                score, removal_length, new_length, match_found, new_A = simulate_insertion_tool(A_copy, card, pos)
+                #特征计算
+                score, removal_length, new_length, _, new_A = simulate_insertion_tool(A_copy, card, pos)
                 future_score = calculate_future_score(new_A, remaining_B)
 
                 features = [
@@ -768,23 +727,28 @@ def GA_Strategy(genome, A, B):
                 ]
 
                 all_features.append(features)
-                # 最佳插入位置
+
                 all_positions.append(pos)
                 # all_scores.append(score)
                 # all_new_As.append(new_A)
 
-            # 将所有特征转换为GPU张量并一次性计算
+            # 将所有特征转换为张量并一次性在GPU上计算
             if all_features:
                 features_tensor = torch.tensor(all_features, dtype=torch.float32, device=device)
-                # 批量计算点积 (每个位置的评估值)
+
+
+                # 特征张量和目前的基因张量计算点积。对于每一个可能的插入位置，
+                # 其对应的特征向量会与genome_tensor 进行点积运算 也就是给每个特征加权：
+                # 评估值 = (feature1 * genome_tensor的第一个元素) + (feature2 * genome_tensor的第二个元素) + ... + (feature6 * genome_tensor的第六个元素)
                 values = torch.matmul(features_tensor, genome_tensor)
 
-                # 找到最佳位置
+                # 用于返回输入张量中最大元素的索引
                 best_idx = torch.argmax(values).item()
+                #该索引对应的值(最大的评估值)
                 best_value = values[best_idx].item()
+                #最大评估值的对应插入位置(最优插入)
                 best_pos = all_positions[best_idx]
-                # best_score = all_scores[best_idx]
-                # best_new_A = all_new_As[best_idx]
+
 
                 card_values.append((i, best_value, best_pos))
 
@@ -796,7 +760,7 @@ def GA_Strategy(genome, A, B):
     # 根据评估值对卡进行排序 x[1] 就是 best_value ，即每张牌的最佳评估值
     card_values.sort(key=lambda x: x[1], reverse=True)
 
-    # 根据排序后的顺序生成策略
+    # 根据排序后的顺序生成策略   注意这一步  因为它是依据评估值进行排序的,所以是贪心算法
     strategy = [(card_idx, pos) for card_idx, _, pos in card_values]
 
     return strategy
@@ -858,4 +822,64 @@ def evaluate_genome(genome, num_rounds=1000, seed_base=111):
     print(f"基因组平均得分: {mean_score}")
 
     return mean_score  # 返回平均得分
+
+遗传算法中策略的生成步骤:
+
+遗传算法的实际参数:
+    pop_size=1000 #每一代种群中个体的数量
+    generations=30 #完整迭代周期重复次数
+    num_rounds=500 # 每个个体的评估轮次
+    elitism_ratio=0.1 #每一代中直接保留到下一代的最优个体的比例
+    tournament_size=3 # 锦标赛规模:随机选取3个编为一组,选取其中最佳的基因作为父代
+    evolution_methods=['standard', 'island', 'de'] #岛屿模型 差分进化 传统遗传算法
+  
+    #早停相关参数
+    early_stop_generations=5
+    early_stop_threshold=0.01
+
+
+    genome = genetic_algorithm(pop_size,generations, num_rounds, elitism_ratio, tournament_size, evolution_methods, early_stop_generations, early_stop_threshold)  # 运行遗传算法获取最佳基因组
+
+
+    这是一个训练后得到的基因 
+    Genome model :  [1.5939234785836462, -0.5025118249479125, -0.5296184457165617, 1.4105017073059225, 0.7851904853961442, -0.3300074485121268]
+
+
+
+代码根据了执行结果优化
+
+
+
+(在此例子中使用不同的进化方法改善的并不明显 但是为了实现一个完成度较高的算法  我们这里保留它)
+各进化方法性能分析:
+standard方法: 未被使用
+island方法: 未被使用
+de方法: 平均适应度=47.80, 最大适应度=47.80, 改进率=0.01%, 使用次数=5
+
+
+基因组特征权重:
+当前得分: 1.5939
+移除长度: -0.5025
+新长度: -0.5296
+未来得分: 1.4105
+A元素总和: 0.7852
+B与A交集数量: -0.3300
+### 特征1: 当前得分 (1.5939)
+这个权重非常高且为正值，表明算法非常重视当前移动能够直接带来的得分
+
+### 特征2: 移除长度 (-0.5025)
+这个权重为负值，表明算法倾向于避免移除过多的元素。这可能是因为保留更多元素可以为未来的移动提供更多可能性。
+
+### 特征3: 新长度 (-0.5296)
+同样为负值，表明算法倾向于保持序列较短。这可能是因为较短的序列更容易管理，也更容易在未来找到匹配。
+
+### 特征4: 未来得分 (1.4105)
+这个权重也很高且为正值，仅次于当前得分。这表明算法非常重视移动对未来可能得分的影响，具有很强的前瞻性。
+
+### 特征5: A的元素总和 (0.7852)
+中等正值，表明算法认为保持A中元素总和较高是有利的。这可能是因为更高的总和提供了更多的组合可能性。
+
+### 特征6: B与A的交集数量 (-0.3300)
+小负值，表明算法略微倾向于避免B与A有太多交集。这可能是为了保持多样性，避免重复元素。
+
 

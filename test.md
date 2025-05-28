@@ -44,7 +44,7 @@
 
 ### 4.我认为的项目可能的改进方向和前景,以及结语
 失败的缓存
-假如它够快,使用gpu加速,可能代替传统的递归算法(基于cpu)吗 如果可以就好了
+假如它够快,使用gpu加速,可能代替传统的递归算法(基于cpu)吗 
 
 在预测时使用cuda进行批量特征处理  比递归快的多
 
@@ -667,7 +667,7 @@ def calculate_future_score(A, remaining_B):
 核心函数  
 
 
-
+#根据A,B和给定的基因生成策略
 
 def GA_Strategy(genome, A, B):
     """
@@ -693,7 +693,7 @@ def GA_Strategy(genome, A, B):
 
 
 
-    # 批量计算所有B牌的所有可能插入位置的特征
+    # 根据给定的基因 批量计算所有B牌的所有可能插入位置的 特征
     def compute_card_values_batch(A_copy, B, genome_tensor):
         card_values = []
 
@@ -767,12 +767,15 @@ def GA_Strategy(genome, A, B):
 
 
 
+#用一批种子生成的A,B来评估基因是否够好 返回计算fitness的平均值  (类似于通过计算损失函数来评估ai模型)
 
+#这个函数在实际调用时使用了多进程加速
 
+#种子是为了使用相同的A,B进行评估 避免引入其他变量 seed_base是第一个种子  它会递增
 def evaluate_genome(genome, num_rounds=1000, seed_base=111):
-#种子是为了使用相同的A,B进行评估 避免引入其他变量
-    import torch
-    from AI_algorithm.tool.tool import calculate_score_by_strategy
+
+
+    import calculate_score_by_strategy
 
     # 检查并设置 GPU 可用性
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -781,14 +784,17 @@ def evaluate_genome(genome, num_rounds=1000, seed_base=111):
     # 将基因组转换为 GPU 张量
     # genome_tensor = torch.tensor(genome, dtype=torch.float32, device=device)
 
-    # 批处理大小
-    batch_size = 32
+    # GPU批处理大小
+    batch_size = 128
 
     # 预分配结果数组
+    #torch.zeros 创建一个所有元素都初始化为 0 的张量(这里是一维张量,也就是向量)  长度是num_rounds,数据类型是float32,张量将被分配在计算设备 device 上
     total_scores = torch.zeros(num_rounds, dtype=torch.float32, device=device)
 
-    # 批量处理评估任务
+    # 分批处理评估任务 步长为 batch_size
     for batch_start in range(0, num_rounds, batch_size):
+
+#计算实际的batch_size
         batch_end = min(batch_start + batch_size, num_rounds)
         batch_size_actual = batch_end - batch_start
 
@@ -797,7 +803,8 @@ def evaluate_genome(genome, num_rounds=1000, seed_base=111):
         batch_A = []
         batch_B = []
         for _ in range(batch_size_actual):
-        #种子
+
+        #使用种子生成A和B,填充进batch 注意每个基因受过num_rounds次评估 这一批种子会随着批次的索引增加  每个基因对应的用于评估的种子集合都是相同的
             A, B = deal_cards(seed=seed_base + batch_start + _)
             batch_A.append(A)
             batch_B.append(B)
@@ -807,7 +814,7 @@ def evaluate_genome(genome, num_rounds=1000, seed_base=111):
 
         for j in range(batch_size_actual):
 
-#GA_Strategy  获取当前策略
+#GA_Strategy 当前基因转换为对应的策略
             strategy = GA_Strategy(genome, batch_A[j], batch_B[j])
 
             #计算策略对应的得分
@@ -822,6 +829,136 @@ def evaluate_genome(genome, num_rounds=1000, seed_base=111):
     print(f"基因组平均得分: {mean_score}")
 
     return mean_score  # 返回平均得分
+
+
+
+    #岛屿模型(Multi-Population Genetic Algorithm)
+
+def island_model_evolution(population, fitnesses, pop_size, tournament_size, mutation_strength,
+                           num_rounds, islands=4, migration_interval=10, migration_rate=0.1,
+                           generation=0, max_generations=60):
+    """
+    实现岛屿模型进化，将总人口分成几个独立'岛屿'，定期交换个体
+
+    参数：
+    - population: 当前种群
+    - fitnesses: 当前种群的适应度值
+    - pop_size: 总人口规模
+    - tournament_size: 锦标赛选择规模
+    - mutation_strength: 变异强度
+    - islands: 岛屿数量
+    - migration_interval: 多少代进行一次迁移
+    - migration_rate: 每次迁移的个体比例
+    - generation: 当前代数
+    - max_generations: 最大代数
+
+    返回：
+    - new_population: 进化后的新种群
+    - new_fitnesses: 新种群的适应度
+    """
+    # 动态调整迁移率 - 随着进化过程增加交流
+    progress_ratio = generation / max_generations if max_generations > 0 else 0.5
+    adaptive_migration_rate = migration_rate * (1.0 + progress_ratio)  # 迁移率逐渐增加到原来的2倍
+
+    # 计算每个岛屿的规模和迁移数量
+    island_size = pop_size // islands
+    migration_size = int(island_size * adaptive_migration_rate)
+
+    # 将总人口分割成岛屿
+    island_populations = []
+    island_fitnesses = []
+
+    for i in range(islands):
+        start_idx = i * island_size
+        end_idx = start_idx + island_size if i < islands - 1 else pop_size
+        island_populations.append(population[start_idx:end_idx])
+        island_fitnesses.append(fitnesses[start_idx:end_idx])
+
+    # 每个岛屿独立进化
+    new_island_populations = []
+    new_island_fitnesses = []
+
+    for i in range(islands):
+        # 岛内进化
+        # 选择精英
+        sorted_indices = sorted(range(len(island_fitnesses[i])),
+                              key=lambda k: island_fitnesses[i][k], reverse=True)
+        elitism_count = int(0.1 * len(island_populations[i]))
+        elites = [island_populations[i][idx] for idx in sorted_indices[:elitism_count]]
+
+        # 锦标赛选择
+        selected = []
+        for _ in range(len(island_populations[i]) - elitism_count):
+            candidates = random.sample(range(len(island_populations[i])), tournament_size)
+            winner_idx = max(candidates, key=lambda idx: island_fitnesses[i][idx])
+            selected.append(island_populations[i][winner_idx])
+
+        # 交叉和变异
+        next_population = elites.copy()
+        while len(next_population) < len(island_populations[i]):
+            parent1, parent2 = random.sample(selected, 2)
+            child = [(p1 + p2) / 2 if random.random() < 0.7 else p1
+                    for p1, p2 in zip(parent1, parent2)]
+            # 修复变异部分的错误
+            mutation_strength = 0.7  # 增加变异强度
+            child = [gene + random.gauss(0, mutation_strength) for gene in child]
+            next_population.append(child)
+
+        new_island_populations.append(next_population)
+
+    # 评估新岛屿种群适应度
+    new_island_fitnesses = [evaluate_genomes_return_fitness(pop, num_rounds)
+                            for pop in new_island_populations]
+
+    # 迁移过程 (如果当前代数是迁移间隔的倍数)
+    # 注意：在实际使用时，需要传入当前代数作为参数，这里假设每次调用都执行迁移
+    for i in range(islands):
+        # 选择当前岛屿的最佳个体进行迁移
+        sorted_indices = sorted(range(len(new_island_fitnesses[i])),
+                              key=lambda k: new_island_fitnesses[i][k], reverse=True)
+        migrants_indices = sorted_indices[:migration_size]
+        migrants = [new_island_populations[i][idx] for idx in migrants_indices]
+
+        # 将个体迁移到下一个岛屿(环形拓扑)
+        target_island = (i + 1) % islands
+
+        # 在目标岛屿中，替换最差的个体
+        target_sorted_indices = sorted(range(len(new_island_fitnesses[target_island])),
+                                     key=lambda k: new_island_fitnesses[target_island][k])
+        for j, migrant in enumerate(migrants):
+            if j < len(target_sorted_indices):
+                replace_idx = target_sorted_indices[j]
+                new_island_populations[target_island][replace_idx] = migrant
+
+    # 重新评估迁移后的适应度
+    new_island_fitnesses = [evaluate_genomes_return_fitness(pop, num_rounds)
+                            for pop in new_island_populations]
+
+    # 合并所有岛屿种群
+    new_population = []
+    new_fitnesses = []
+    for pop, fit in zip(new_island_populations, new_island_fitnesses):
+        new_population.extend(pop)
+        new_fitnesses.extend(fit)
+
+    # 如果合并后的种群大小超过了原始种群大小，截断到原始大小
+    if len(new_population) > pop_size:
+        combined = list(zip(new_population, new_fitnesses))
+        sorted_combined = sorted(combined, key=lambda x: x[1], reverse=True)
+        new_population = [x[0] for x in sorted_combined[:pop_size]]
+        new_fitnesses = [x[1] for x in sorted_combined[:pop_size]]
+
+    return new_population, new_fitnesses
+
+
+
+
+
+
+
+
+
+
 
 遗传算法中策略的生成步骤:
 
@@ -841,9 +978,7 @@ def evaluate_genome(genome, num_rounds=1000, seed_base=111):
     genome = genetic_algorithm(pop_size,generations, num_rounds, elitism_ratio, tournament_size, evolution_methods, early_stop_generations, early_stop_threshold)  # 运行遗传算法获取最佳基因组
 
 
-    这是一个训练后得到的基因 
-    Genome model :  [1.5939234785836462, -0.5025118249479125, -0.5296184457165617, 1.4105017073059225, 0.7851904853961442, -0.3300074485121268]
-
+ 
 
 
 代码根据了执行结果优化
@@ -856,6 +991,10 @@ standard方法: 未被使用
 island方法: 未被使用
 de方法: 平均适应度=47.80, 最大适应度=47.80, 改进率=0.01%, 使用次数=5
 
+
+
+   这是一个训练后得到的基因 
+    Genome model :  [1.5939234785836462, -0.5025118249479125, -0.5296184457165617, 1.4105017073059225, 0.7851904853961442, -0.3300074485121268]
 
 基因组特征权重:
 当前得分: 1.5939

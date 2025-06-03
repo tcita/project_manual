@@ -638,7 +638,8 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 
 
 ## 基因的组成
-6维权重向量，对应6个游戏特征：当前得分、移除长度、新长度、未来得分、A元素总和、交集数量。
+- `calculate_future_score` :用启发式方法计算未来得分这个特征
+6维权重向量，对应6个游戏特征：当前得分、移除长度、新长度、未来得分、新A的元素总和、交集数量。
 
 ## 适应度评估
 - `evaluate_genome()`: 用个体权重执行多轮游戏，返回平均得分
@@ -657,8 +658,7 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 
 ## 高级进化策略
 - `island_model_evolution()`: 岛屿模型，将种群分割为独立岛屿，定期迁移优秀个体
-- `differential_evolution()`: 差分进化备选方案
-- 动态方法切换：根据改进效果选择进化策略
+- 动态方法切换：在训练主函数genetic_algorithm()根据改进效果选择进化策略
 
 ## 优化机制
 - GPU加速：PyTorch张量运算
@@ -690,8 +690,8 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
                     removal_length,  # 匹配的移除长度
                     new_length,  # A由于插入操作得到的新长度
                     future_score,  # 未来得分
-                    sum_A,  # A的元素总和
-                    intersection_count,  # B与A的交集数量
+                    sum_new_A,  # 匹配后新A的元素总和
+                    B_card_proportion,  # B的出牌占B剩余牌的价值比例
                 ]
 
 
@@ -904,6 +904,183 @@ def island_model_evolution(population, fitnesses, pop_size, tournament_size, mut
     return new_population, new_fitnesses
 
 
+
+
+
+
+#根据A,B和给定的基因生成策略 (给调用遗传算法提供接口)
+
+def GA_Strategy(genome, A, B):
+    """
+    计算每一个插入位置的特征张量,并与它和基因张量做点积计算 得到这个位置的"评估值",并按照评估值从大到小排序
+
+    参数：
+    - genome: 基因组权重 (NumPy数组或PyTorch张量)
+    - A: A玩家的牌
+    - B: B玩家的牌
+
+    返回：
+    - strategy: 最佳策略
+    """
+
+    # 检查CUDA可用性并设置设备
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # 检查genome类型并转换为torch张量
+    if isinstance(genome, torch.Tensor):
+        genome_tensor = genome.to(device)
+    else:
+        genome_tensor = torch.tensor(genome, dtype=torch.float32, device=device)
+
+
+
+    # 根据给定的基因 批量计算所有B牌的所有可能插入位置的 特征
+    def compute_card_values_batch(A_copy, B, genome_tensor):
+        card_values = []
+
+        #特征计算
+    
+        A_set = set(A_copy)
+
+        #使用嵌套循环进行插入模拟  每一个插入位置都会计算6个特征
+        for i, card in enumerate(B):
+            remaining_B = [B[j] for j in range(len(B)) if j != i]
+           
+       
+            B_card_proportion  = card/sum(remaining_B)
+
+            # 插入位置以及特征集合
+            all_features = []
+            all_positions = []
+
+            for pos in range(len(A_copy) + 1):
+                #特征计算
+                score, removal_length, new_length, _, new_A = simulate_insertion_tool(A_copy, card, pos)
+                future_score = calculate_future_score(new_A, remaining_B)
+
+                sum_new_A=sum(new_A),  # 匹配后新A的元素总和
+                features = [
+                    score,  # 当前得分
+                    removal_length,  # 移除长度
+                    new_length,  # 新长度
+                    future_score,  # 未来得分
+                    sum_new_A,  # 匹配后新A的元素总和
+                    B_card_proportion,  # B的出牌占B剩余牌的价值比例
+                ]
+
+                all_features.append(features)
+
+                all_positions.append(pos)
+                # all_scores.append(score)
+                # all_new_As.append(new_A)
+
+            # 将所有特征转换为张量并一次性在GPU上计算
+            if all_features:
+                features_tensor = torch.tensor(all_features, dtype=torch.float32, device=device)
+
+
+                # 特征张量和目前的基因张量计算点积。对于每一个可能的插入位置，
+                # 其对应的特征向量会与genome_tensor 进行点积运算 也就是给每个特征加权：
+                # 评估值 = (feature1 * genome_tensor的第一个元素) + (feature2 * genome_tensor的第二个元素) + ... + (feature6 * genome_tensor的第六个元素)
+                values = torch.matmul(features_tensor, genome_tensor)
+
+                # 用于返回输入张量中最大元素的索引
+                best_idx = torch.argmax(values).item()
+                #该索引对应的值(最大的评估值)
+                best_value = values[best_idx].item()
+                #最大评估值的对应插入位置(最优插入)
+                best_pos = all_positions[best_idx]
+
+
+                card_values.append((i, best_value, best_pos))
+
+        return card_values
+
+    # 计算卡值
+    card_values = compute_card_values_batch(A.copy(), B, genome_tensor)
+
+    # 根据评估值对卡进行排序 x[1] 就是 best_value ，即每张牌的最佳评估值
+    card_values.sort(key=lambda x: x[1], reverse=True)
+
+    # 根据排序后的顺序生成策略   注意这一步  因为它是依据评估值进行排序的,所以是贪心算法
+    strategy = [(card_idx, pos) for card_idx, _, pos in card_values]
+
+    return strategy
+
+
+
+
+#用一批种子生成的A,B来评估基因是否够好 返回计算fitness的平均值  (类似于通过计算损失函数来评估ai模型)
+
+#这个函数在实际调用时使用了多进程加速
+
+#种子是为了使用相同的A,B进行评估 避免引入其他变量 seed_base是第一个种子  它会递增
+def evaluate_genome(genome, num_rounds=1000, seed_base=111):
+
+
+    import calculate_score_by_strategy
+
+    # 检查并设置 GPU 可用性
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+    # 将基因组转换为 GPU 张量
+    # genome_tensor = torch.tensor(genome, dtype=torch.float32, device=device)
+
+    # GPU批处理大小
+    batch_size = 1024
+
+    # 预分配结果数组
+    #torch.zeros 创建一个所有元素都初始化为 0 的张量(这里是一维张量,也就是向量)  长度是num_rounds,数据类型是float32,张量将被分配在计算设备 device 上
+    total_scores = torch.zeros(num_rounds, dtype=torch.float32, device=device)
+
+    # 分批处理评估任务 步长为 batch_size
+    for batch_start in range(0, num_rounds, batch_size):
+
+#计算实际的batch_size
+        batch_end = min(batch_start + batch_size, num_rounds)
+        batch_size_actual = batch_end - batch_start
+
+
+        # 为当前批次生成所有A和B
+        batch_A = []
+        batch_B = []
+        for _ in range(batch_size_actual):
+
+        #使用种子生成A和B,填充进batch 注意每个基因受过num_rounds次评估 这一批种子会随着批次的索引增加  每个基因对应的用于评估的种子集合都是相同的
+            A, B = deal_cards(seed=seed_base + batch_start + _)
+            batch_A.append(A)
+            batch_B.append(B)
+
+        # 并行评估批次使用GPU
+        batch_scores = torch.zeros(batch_size_actual, dtype=torch.float32, device=device)
+
+        for j in range(batch_size_actual):
+
+#GA_Strategy 当前基因转换为对应的策略
+            strategy = GA_Strategy(genome, batch_A[j], batch_B[j])
+
+            #计算策略对应的得分
+            batch_scores[j] = calculate_score_by_strategy(batch_A[j], batch_B[j], strategy)
+
+        # 复制批次得分到总得分
+        total_scores[batch_start:batch_end] = batch_scores
+
+    # 计算最终平均分(平均)
+    mean_score = torch.mean(total_scores).item()
+
+    print(f"基因组平均得分: {mean_score}")
+
+    return mean_score  # 返回平均得分
+
+
+
+
+
+
+
+
+
 #遗传算法训练主函数
 
 def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tournament_size,
@@ -929,9 +1106,10 @@ def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tourname
     population = []
     for _ in range(pop_size):
         genome = []
-        # 引入更多随机性  
+       
+
         """
-        基于先验知识的种群初始化策略
+        基于先验知识的种群初始化策略("温启动")
 
 
         这里使用了一个优化手段,回顾基因的features = [
@@ -939,21 +1117,20 @@ def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tourname
             removal_length,  # 匹配的移除长度
             new_length,  # A由于插入操作得到的新长度
             future_score,  # 未来得分
-            sum_A,  # A的元素总和
-            intersection_count,  # B与A的交集数量
+            sum_new_A,  # 匹配后新A的元素总和
+            B_card_proportion,  # B的出牌占B剩余牌的价值比例
         ]
         经过足够多的测试后 ，可以得出以下结论：
-        score,future_score,sum_A与结果正相关  且score和future_score对于策略一般大于1.5,影响较大  其余特征均负相关
+        score,future_score  且score和future_score权重一般>1.5,影响较大
         """
         
         if random.random() < 0.7:  # 70%的个体按原方式初始化
             for i in range(6):
                 if i == 0 or i == 3 :
                     genome.append(random.uniform(1.5, 2.5))
-                elif i == 4 :
-                    genome.append(random.uniform(0, 1))
+               
                 else:
-                    genome.append(random.uniform(-1, 0))
+                    genome.append(random.uniform(-0.5, 0.5))
         else:  # 30%的个体完全随机初始化
             for i in range(6):
                 # 用[-2,2]随机浮点数
@@ -1021,23 +1198,27 @@ def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tourname
             next_population.append(child)  # 添加子代到下一代种群
 
         # 自适应进化方法选择 
-       
-        #根据历史表现选择进化方法
+       #如果改进率＞0则沿用方法 否则选择另一个方法  最初的进化方法使用的是岛屿模型 
+
         if len(best_fitness_history) > 1:
-         
             improvement = best_fitness_history[-1] - best_fitness_history[-2]
-           
-            # 如果有改进，继续使用上一代的方法 
             if improvement > 0:
                 method = method_history[-1]
-               
-             # 如果无改进，随机选择下一个方法    
+                print(f"改进率为 {improvement:.4f}，沿用方法：{method}")
             else:
-                method = np.random.choice(evolution_methods)
-               
+                method = method_history[-1]
+                # 找到 现在方法 的索引
+                index_of_method_now = evolution_methods.index(method)
+
+                # 如果改进率 <= 0，使用另一个方法(这里针对只使用两种进化方法,如果需要使用多种进化方法,
+                #可以在某一种进化方法进化率不佳时,改为基于概率来随机选择下一代的另一个进化方法)
+
+                method = evolution_methods[1 - index_of_method_now]
+                #method = np.random.choice(evolution_methods)
+                print(f"改进率为 {improvement:.4f}，切换方法为：{method}")
         else:
-        #无历史改进数据(第一代随机方法选择)，随机选择
-            method = np.random.choice(evolution_methods)
+            method = evolution_methods[0]
+            print(f"无历史改进数据，使用第一个方法：{method}")
             
         method_history.append(method)
 
@@ -1055,261 +1236,75 @@ def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tourname
 
 
 
-
-
-
-#根据A,B和给定的基因生成策略 (给调用遗传算法提供接口)
-
-def GA_Strategy(genome, A, B):
-    """
-    计算每一个插入位置的特征张量,并与它和基因张量做点积计算 得到这个位置的"评估值",并按照评估值从大到小排序
-
-    参数：
-    - genome: 基因组权重 (NumPy数组或PyTorch张量)
-    - A: A玩家的牌
-    - B: B玩家的牌
-
-    返回：
-    - strategy: 最佳策略
-    """
-
-    # 检查CUDA可用性并设置设备
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    # 检查genome类型并转换为torch张量
-    if isinstance(genome, torch.Tensor):
-        genome_tensor = genome.to(device)
-    else:
-        genome_tensor = torch.tensor(genome, dtype=torch.float32, device=device)
-
-
-
-    # 根据给定的基因 批量计算所有B牌的所有可能插入位置的 特征
-    def compute_card_values_batch(A_copy, B, genome_tensor):
-        card_values = []
-
-        #特征计算
-        sum_A = sum(A_copy)
-        A_set = set(A_copy)
-
-        #使用嵌套循环进行插入模拟  每一个插入位置都会计算6个特征
-        for i, card in enumerate(B):
-            remaining_B = [B[j] for j in range(len(B)) if j != i]
-            remaining_B_set = set([card] + remaining_B)
-            #特征计算
-            intersection_count = len(remaining_B_set & A_set)
-
-            # 插入位置以及特征集合
-            all_features = []
-            all_positions = []
-
-            for pos in range(len(A_copy) + 1):
-                #特征计算
-                score, removal_length, new_length, _, new_A = simulate_insertion_tool(A_copy, card, pos)
-                future_score = calculate_future_score(new_A, remaining_B)
-
-                features = [
-                    score,  # 当前得分
-                    removal_length,  # 移除长度
-                    new_length,  # 新长度
-                    future_score,  # 未来得分
-                    sum_A,  # A的元素总和
-                    intersection_count,  # B与A的交集数量
-                ]
-
-                all_features.append(features)
-
-                all_positions.append(pos)
-                # all_scores.append(score)
-                # all_new_As.append(new_A)
-
-            # 将所有特征转换为张量并一次性在GPU上计算
-            if all_features:
-                features_tensor = torch.tensor(all_features, dtype=torch.float32, device=device)
-
-
-                # 特征张量和目前的基因张量计算点积。对于每一个可能的插入位置，
-                # 其对应的特征向量会与genome_tensor 进行点积运算 也就是给每个特征加权：
-                # 评估值 = (feature1 * genome_tensor的第一个元素) + (feature2 * genome_tensor的第二个元素) + ... + (feature6 * genome_tensor的第六个元素)
-                values = torch.matmul(features_tensor, genome_tensor)
-
-                # 用于返回输入张量中最大元素的索引
-                best_idx = torch.argmax(values).item()
-                #该索引对应的值(最大的评估值)
-                best_value = values[best_idx].item()
-                #最大评估值的对应插入位置(最优插入)
-                best_pos = all_positions[best_idx]
-
-
-                card_values.append((i, best_value, best_pos))
-
-        return card_values
-
-    # 计算卡值
-    card_values = compute_card_values_batch(A.copy(), B, genome_tensor)
-
-    # 根据评估值对卡进行排序 x[1] 就是 best_value ，即每张牌的最佳评估值
-    card_values.sort(key=lambda x: x[1], reverse=True)
-
-    # 根据排序后的顺序生成策略   注意这一步  因为它是依据评估值进行排序的,所以是贪心算法
-    strategy = [(card_idx, pos) for card_idx, _, pos in card_values]
-
-    return strategy
-
-
-
-
-#用一批种子生成的A,B来评估基因是否够好 返回计算fitness的平均值  (类似于通过计算损失函数来评估ai模型)
-
-#这个函数在实际调用时使用了多进程加速
-
-#种子是为了使用相同的A,B进行评估 避免引入其他变量 seed_base是第一个种子  它会递增
-def evaluate_genome(genome, num_rounds=1000, seed_base=111):
-
-
-    import calculate_score_by_strategy
-
-    # 检查并设置 GPU 可用性
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
-    # 将基因组转换为 GPU 张量
-    # genome_tensor = torch.tensor(genome, dtype=torch.float32, device=device)
-
-    # GPU批处理大小
-    batch_size = 128
-
-    # 预分配结果数组
-    #torch.zeros 创建一个所有元素都初始化为 0 的张量(这里是一维张量,也就是向量)  长度是num_rounds,数据类型是float32,张量将被分配在计算设备 device 上
-    total_scores = torch.zeros(num_rounds, dtype=torch.float32, device=device)
-
-    # 分批处理评估任务 步长为 batch_size
-    for batch_start in range(0, num_rounds, batch_size):
-
-#计算实际的batch_size
-        batch_end = min(batch_start + batch_size, num_rounds)
-        batch_size_actual = batch_end - batch_start
-
-
-        # 为当前批次生成所有A和B
-        batch_A = []
-        batch_B = []
-        for _ in range(batch_size_actual):
-
-        #使用种子生成A和B,填充进batch 注意每个基因受过num_rounds次评估 这一批种子会随着批次的索引增加  每个基因对应的用于评估的种子集合都是相同的
-            A, B = deal_cards(seed=seed_base + batch_start + _)
-            batch_A.append(A)
-            batch_B.append(B)
-
-        # 并行评估批次使用GPU
-        batch_scores = torch.zeros(batch_size_actual, dtype=torch.float32, device=device)
-
-        for j in range(batch_size_actual):
-
-#GA_Strategy 当前基因转换为对应的策略
-            strategy = GA_Strategy(genome, batch_A[j], batch_B[j])
-
-            #计算策略对应的得分
-            batch_scores[j] = calculate_score_by_strategy(batch_A[j], batch_B[j], strategy)
-
-        # 复制批次得分到总得分
-        total_scores[batch_start:batch_end] = batch_scores
-
-    # 计算最终平均分(平均)
-    mean_score = torch.mean(total_scores).item()
-
-    print(f"基因组平均得分: {mean_score}")
-
-    return mean_score  # 返回平均得分
-
-
-
-
-
-
-
-
-
-
 遗传算法的实际参数 经过测试,此模型收敛的比较快,这些参数已经能足够好的结果了:
 
-    pop_size=400
+    pop_size=500
     generations=20
-    num_rounds=200
+    num_rounds=500
     elitism_ratio=0.1
     tournament_size=3
-    evolution_methods=['standard', 'island']
+    evolution_methods=['island','standard']
 
     early_stop_generations=3
     early_stop_threshold=0.01
-
+   
     genome = genetic_algorithm(pop_size,generations, num_rounds, elitism_ratio, tournament_size, evolution_methods, early_stop_generations, early_stop_threshold)  
 
 
 
- 
+接着我们来分析一下得到的最佳基因 以下基于我的一个测试数据
+
+这是一个训练后得到的基因 
+
+
+
+ [3.163065172139399, -0.14557460614255324, -0.32195732929042986, 2.000628650461858, 1.0360760579341703, -1.4134171163813596]
 
 
 
 
-   这是一个训练后得到的基因 
-    Genome model :  [1.5939234785836462, -0.5025118249479125, -0.5296184457165617, 1.4105017073059225, 0.7851904853961442, -0.3300074485121268]
+各进化方法性能分析:
+island方法: 平均适应度=48.31, 最大适应度=48.38, 改进率=0.27%, 使用次数=3
+
+standard方法: 未被使用
+这说明岛屿模型进化是有起到作用的,进化率一直>0,这导致传统遗传算法未使用;
+
+最终改进率较低,说明第一代基因表现的已经不错了
+
+这个模型的最佳基因在连续3代低于早停阈值,被早停机制终止,收敛的很快(这与温启动也有关)
+
 
 基因组特征权重:
-当前得分: 1.5939
-移除长度: -0.5025
-新长度: -0.5296
-未来得分: 1.4105
-A元素总和: 0.7852
-B与A交集数量: -0.3300
-### 特征1: 当前得分 (1.5939)
-这个权重非常高且为正值，表明算法非常重视当前移动能够直接带来的得分
+当前得分: 3.1631
+移除长度: -0.1456
+新长度: -0.3220
+未来得分: 2.0006
+新A元素总和: 1.0361
+出牌占B剩余牌的价值比例: -1.4134
 
-### 特征2: 移除长度 (-0.5025)
-这个权重为负值，表明算法倾向于避免移除过多的元素。这可能是因为保留更多元素可以为未来的移动提供更多可能性。
+回到基因本身,分析它的最终特征的权重:
 
-### 特征3: 新长度 (-0.5296)
-同样为负值，表明算法倾向于保持序列较短。这可能是因为较短的序列更容易管理，也更容易在未来找到匹配。
+### 特征1: 当前得分 (3.1631)
+这个权重非常高且为正值，表明算法非常重视当前操作能够直接带来的得分
 
-### 特征4: 未来得分 (1.4105)
+### 特征2: 该位置的匹配后移除的长度 (-0.1456)
+这个权重为负值，表明算法倾向于移除较少的元素。表明算法倾向于避免移除过多的元素。这可能是因为保留更多元素可以为未来的移动提供更多可能性。
+
+### 特征3: 新长度 (-0.3220)
+负值，表明算法倾向于在插入匹配操作后得到较短的新A。这似乎与特征2的权重倾向吻合
+
+(虽然特征2和特征3的值可以通过简单的数学计算得到(新A的长度=旧A的长度-由于匹配被移除的长度) 但是我无法保证ai算法能察觉到这个关系  而且这两个状态是代表了不同的视角 所以我倾向保留 这个特征可能带来性能提升或加速模型收敛)
+
+### 特征4: 未来得分 (2.0006)
 这个权重也很高且为正值，仅次于当前得分。这表明算法非常重视移动对未来可能得分的影响，具有很强的前瞻性。
 
-### 特征5: A的元素总和 (0.7852)
-中等正值，表明算法认为保持A中元素总和较高是有利的。这可能是因为更高的总和提供了更多的组合可能性。
+### 特征5: 新A的元素总和 (1.0361)
+权重为较高的正值  可能说明 算法不仅仅考虑当前得分 也希望保留一些得分可能让后续的操作获得
 
-### 特征6: B与A的交集数量 (-0.3300)
-小负值，表明算法略微倾向于避免B与A有太多交集。这可能是为了保持多样性，避免重复元素。
-
-
-
-各进化方法性能分析:
-standard方法: 平均适应度=48.65, 最大适应度=48.69, 改进率=0.17%, 使用次数=2
-island方法: 平均适应度=48.65, 最大适应度=48.65, 改进率=0.00%, 使用次数=1
-
-Genome model :  [2.0195332597953675, -0.25463285223957144, -0.2931028178243443, 1.7412285628631057, 0.5661556620443767, -0.31580113743065963]
-Best genome saved to trained/best_genome.pkl
-
-基因组特征权重:
-当前得分: 2.0195
-移除长度: -0.2546
-新长度: -0.2931
-未来得分: 1.7412
-A元素总和: 0.5662
-B与A交集数量: -0.3158
+### 特征6:B的出牌占B剩余牌的价值比例(-1.4134)
+这个特征表明了算法是倾向于先打出高价值的牌,还是先打出低价值的牌  权重是较高的负值 说明算法倾向先打出B牌中价值较低的牌
 
 
 
-各进化方法性能分析:
-standard方法: 平均适应度=48.70, 最大适应度=48.70, 改进率=0.00%, 使用次数=2
-island方法: 平均适应度=48.70, 最大适应度=48.70, 改进率=0.00%, 使用次数=1
 
-Genome model :  [2.3743590686956035, -0.48376345338990934, -0.6264156095823054, 2.0077230845881813, 0.7371065038346376, -0.17165442336290104]
-Best genome saved to trained/best_genome.pkl
-
-基因组特征权重:
-当前得分: 2.3744
-移除长度: -0.4838
-新长度: -0.6264
-未来得分: 2.0077
-A元素总和: 0.7371
-B与A交集数量: -0.1717
+然后要调用接口(GA_strategy)来测试真实的A,B中,评估我们得到的基因   但是这一部分会放到后面,和transformer一起评测

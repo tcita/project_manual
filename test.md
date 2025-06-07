@@ -1371,7 +1371,7 @@ standard方法: 未被使用
 """
 *注 :我尝试过将训练集的max_score(即最佳出牌策略的对应得分,也就是此时可能得到的最高分)也加入训练 ,使用A,B作为输入,max_score作为目标  如果单单看预测出的max_score的准确性 结果非常好,loss小于1   
 
-但是经过测试,生成的模型的对于max_score高准确度预测仅仅限制于A,B的长度分别为6和3时,也就是说模型并没有学会"真正"的计算得分的通用方法,比如当len(A)=9而不是6时,预测结果会很糟糕   我也尝试过将max_score作为辅助特征用来指导best_move的生成  但遗憾的是几乎没有区别,也就是模型无法意识到max_score和best_move之间的关系   所以我放弃了这个想法,依然只使用A,B作为输入特征  因为这些研究的具体步骤其实和我接下来展示的transformer都训练过程几乎一样,只是换了几个参数,所以不再展开详述了
+但是经过测试,生成的模型的对于max_score高准确度预测仅仅限制于A,B的长度分别为6和3时,也就是说模型并没有学会"真正"的计算得分的通用方法,比如当len(A)=9而不是6时,预测结果会很糟糕   我也尝试过将max_score额外加入,作为辅助特征用来指导best_move的生成  但遗憾的是几乎没有区别,也就是模型无法意识到max_score和best_move之间的关系   所以我放弃了这个想法,依然只使用A,B作为输入特征  因为这些研究的具体步骤其实和我接下来展示的transformer都训练过程几乎一样,只是换了几个参数,所以不再展开详述了
 """
 
 这个transformer的训练收敛的就不像遗传算法那样快了 我一开始尝试过较精简的实现  但是出现了收敛过慢,梯度爆炸,无法灵活的手动停止训练等等问题  所以除了早停之外,我加入了学习率预热,余弦退火,优雅退出(信号处理),来在不破坏性能的前提下加速训练
@@ -1470,7 +1470,7 @@ transformer模型框架概述
 
     训练完成后，生成一个 .pth 文件,包含训练好的 TransformerMovePredictor 模型的权重参数。这个文件可用于后续的策略预测。
 
-transformer核心函数实现:
+transformer核心函数实现(大多数是transformer的经典实现):
 
 class PositionalEncoding(nn.Module):
     # 确保 max_len >= num_a + num_b (6 + 3 = 9)
@@ -1487,10 +1487,33 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=20):  # 增加 max_len 以确保安全
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
+        #张量初始化
         pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
 
+        #创建一个包含位置索引的一维张量,并调整为形状是(max_len * 1)的二维张量
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        
+       
+       #Sinusoidal Positional Encoding的计算公式
+
+#创建一个从 0 开始，到 d_model（不含）结束，步长为 2 的序列
+
+       
+        
+
+ """
+        将不同频率的正弦和余弦函数应用到位置编码张量 pe 的偶数和奇数维度上 得到独一无二的编码
+
+        PE(position,dimension_index)    
+        position :代表词在输入序列中的位置 
+        dimension_index: 代表维度的索引 类似PE这个一维数组的位置索引
+
+       
+        PE(pos,2i)​=   sin(​pos/ 10000^(2i/d_model​) )
+        PE(pos,2i+1)​= cos(​pos/ 10000^(2i/d_model​) )
+        正弦位置编码（Sinusoidal Positional Encoding）在尽可能确保PE(pos)是唯一的同时,也实现了从 pos 到 pos+k 的变换是线性的(可以通过和变换矩阵做乘法完成)
+"""
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
@@ -1498,6 +1521,81 @@ class PositionalEncoding(nn.Module):
         #将计算好的位置编码 pe 注册为模型的缓冲区 作为模型的一部分 但不会被视为模型参数进行梯度更新和优化
         self.register_buffer('pe', pe)
 
+#将输入的词嵌入向量与从缓冲区中取出的、长度匹配的位置编码向量相加，再返回dropout层的处理结果,而为模型注入关键的序列顺序信息 
     def forward(self, x):
         x = x + self.pe[:, :x.size(1)]
         return self.dropout(x)
+
+
+
+
+
+
+class TransformerMovePredictor(nn.Module):
+    # 修改默认参数以反映新的固定长度和增加的特征维度
+    def __init__(self, input_dim=6, d_model=128, nhead=8, num_encoder_layers=3,
+                 dim_feedforward=512, dropout=0.1, num_a=6, num_b=3):  # 修改input_dim为6
+        super(TransformerMovePredictor, self).__init__()
+        
+
+        self.num_a = num_a
+        self.num_b = num_b
+        self.seq_len = num_a + num_b  # 现在是 6 + 3 = 9
+        self.d_model = d_model
+
+        self.input_embed = nn.Linear(input_dim, d_model)
+        self.type_embed = nn.Embedding(2, d_model)  # 0 for A, 1 for B
+        # 确保 PositionalEncoding 的 max_len 足够大
+        self.pos_encoder = PositionalEncoding(d_model, dropout, max_len=self.seq_len + 5)
+
+        encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead,
+                                                   dim_feedforward=dim_feedforward, dropout=dropout,
+                                                   batch_first=True)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
+
+        # 输出头仍然基于 num_b = 3
+        self.order_head = nn.Linear(num_b * d_model, num_b * num_b)
+        self.pos_head = nn.Linear(num_b * d_model, num_b)
+
+        self.init_weights()
+
+    def init_weights(self):
+        initrange = 0.1
+        self.input_embed.weight.data.uniform_(-initrange, initrange)
+        self.input_embed.bias.data.zero_()
+        self.type_embed.weight.data.uniform_(-initrange, initrange)
+        self.order_head.weight.data.uniform_(-initrange, initrange)
+        self.order_head.bias.data.zero_()
+        self.pos_head.weight.data.uniform_(-initrange, initrange)
+        self.pos_head.bias.data.zero_()
+
+    def forward(self, src, src_mask=None, src_key_padding_mask=None):
+        if src.dim() == 2:
+            src = src.unsqueeze(-1)  # (batch, seq_len, 1)
+
+        input_embedded = self.input_embed(src) * math.sqrt(self.d_model)
+
+        # type_ids: num_a 个 0, num_b 个 1
+        type_ids = torch.cat([torch.zeros(self.num_a, dtype=torch.long),
+                              torch.ones(self.num_b, dtype=torch.long)], dim=0).to(src.device)
+        type_ids = type_ids.unsqueeze(0).expand(src.size(0), -1)  # (batch_size, seq_len)
+        type_embedded = self.type_embed(type_ids)
+
+        embedded = input_embedded + type_embedded
+        embedded = self.pos_encoder(embedded)
+
+        memory = self.transformer_encoder(embedded, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+        # memory shape: (batch_size, seq_len=9, d_model)
+
+        # 提取 B 对应的输出特征 (最后 num_b=3 个)
+        # 使用 self.num_a (现在是6) 作为索引起点
+        b_features = memory[:, self.num_a:]  # (batch_size, num_b=3, d_model)
+
+        b_features_flat = b_features.reshape(b_features.size(0), -1)  # (batch_size, num_b * d_model)
+
+        order_logits_flat = self.order_head(b_features_flat)
+        order_logits = order_logits_flat.view(-1, self.num_b, self.num_b)  # (batch_size, 3, 3)
+
+        pos_preds = self.pos_head(b_features_flat)  # (batch_size, 3)
+
+        return order_logits, pos_preds

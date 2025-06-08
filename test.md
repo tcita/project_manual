@@ -1359,7 +1359,7 @@ standard方法: 未被使用
 
 
 
-然后要调用接口(GA_strategy)来测试  在给定真实的A,B的情况下,评估我们得到的基因   但是这一部分会放到后面,和transformer一起评测
+然后要调用接口(GA_strategy)来测试  在给定真实的A,B的情况下,评估我们的遗传算法和得到的基因 但是这一部分会放到后面,和transformer一起评测
 
 
 
@@ -1494,21 +1494,8 @@ class PositionalEncoding(nn.Module):
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         
        
-       #Sinusoidal Positional Encoding的计算公式
 
-#创建一个从 0 开始，到 d_model（不含）结束，步长为 2 的序列
-
-       
-        
-
- """
-        将不同频率的正弦和余弦函数应用到位置编码张量 pe 的偶数和奇数维度上 得到独一无二的编码
-
-        PE(position,dimension_index)    
-        position :代表词在输入序列中的位置 
-        dimension_index: 代表维度的索引 类似PE这个一维数组的位置索引
-
-       
+ """       
         PE(pos,2i)​=   sin(​pos/ 10000^(2i/d_model​) )
         PE(pos,2i+1)​= cos(​pos/ 10000^(2i/d_model​) )
         正弦位置编码（Sinusoidal Positional Encoding）在尽可能确保PE(pos)是唯一的同时,也实现了从 pos 到 pos+k 的变换是线性的(可以通过和变换矩阵做乘法完成)
@@ -1532,7 +1519,8 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerMovePredictor(nn.Module):
-    # 修改默认参数以反映新的固定长度和增加的特征维度
+   
+
     def __init__(self, input_dim=6, d_model=128, nhead=8, num_encoder_layers=3,
                  dim_feedforward=512, dropout=0.1, num_a=6, num_b=3):  # 修改input_dim为6
         super(TransformerMovePredictor, self).__init__()
@@ -1540,25 +1528,33 @@ class TransformerMovePredictor(nn.Module):
 
         self.num_a = num_a
         self.num_b = num_b
-        self.seq_len = num_a + num_b  # 现在是 6 + 3 = 9
+
+        # 序列长度计算(6+3=9)
+        self.seq_len = num_a + num_b 
         self.d_model = d_model
 
+        #输入嵌入层：将6维的A的维度通过线性变换层投影到128维
         self.input_embed = nn.Linear(input_dim, d_model)
-        self.type_embed = nn.Embedding(2, d_model)  # 0 for A, 1 for B
-        # 确保 PositionalEncoding 的 max_len 足够大
-        self.pos_encoder = PositionalEncoding(d_model, dropout, max_len=self.seq_len + 5)
 
+        # 类型嵌入：区分A类型(0)和B类型(1)  0 for A, 1 for B
+        self.type_embed = nn.Embedding(2, d_model) 
+
+        # 调用位置编码
+        self.pos_encoder = PositionalEncoding(d_model, dropout, max_len=self.seq_len + 5)
+        
+        #Transformer编码器
         encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead,
                                                    dim_feedforward=dim_feedforward, dropout=dropout,
                                                    batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
 
-        # 输出头仍然基于 num_b = 3
+      #预测顺序和位置预测头
         self.order_head = nn.Linear(num_b * d_model, num_b * num_b)
         self.pos_head = nn.Linear(num_b * d_model, num_b)
 
         self.init_weights()
 
+#均匀分布初始化权重
     def init_weights(self):
         initrange = 0.1
         self.input_embed.weight.data.uniform_(-initrange, initrange)
@@ -1570,32 +1566,207 @@ class TransformerMovePredictor(nn.Module):
         self.pos_head.bias.data.zero_()
 
     def forward(self, src, src_mask=None, src_key_padding_mask=None):
+
+    #期望输入至少是三维的
         if src.dim() == 2:
             src = src.unsqueeze(-1)  # (batch, seq_len, 1)
 
         input_embedded = self.input_embed(src) * math.sqrt(self.d_model)
 
-        # type_ids: num_a 个 0, num_b 个 1
+        #类型嵌入
         type_ids = torch.cat([torch.zeros(self.num_a, dtype=torch.long),
                               torch.ones(self.num_b, dtype=torch.long)], dim=0).to(src.device)
         type_ids = type_ids.unsqueeze(0).expand(src.size(0), -1)  # (batch_size, seq_len)
         type_embedded = self.type_embed(type_ids)
 
+
+        #合并嵌入与位置编码
         embedded = input_embedded + type_embedded
         embedded = self.pos_encoder(embedded)
 
+        #调用编码器
         memory = self.transformer_encoder(embedded, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
         # memory shape: (batch_size, seq_len=9, d_model)
 
+
+ #特征提取与处理
         # 提取 B 对应的输出特征 (最后 num_b=3 个)
         # 使用 self.num_a (现在是6) 作为索引起点
         b_features = memory[:, self.num_a:]  # (batch_size, num_b=3, d_model)
 
+#将提取出的 B 类特征 b_features 展平（flatten）
+       
         b_features_flat = b_features.reshape(b_features.size(0), -1)  # (batch_size, num_b * d_model)
 
+#self.order_head: 这是一个线性层，其输出维度是 num_b * num_b。它负责预测B中元素的操作顺序。
         order_logits_flat = self.order_head(b_features_flat)
-        order_logits = order_logits_flat.view(-1, self.num_b, self.num_b)  # (batch_size, 3, 3)
 
-        pos_preds = self.pos_head(b_features_flat)  # (batch_size, 3)
+        #将排序头的扁平化输出 order_logits_flat 重新塑形为一个矩阵
+        order_logits = order_logits_flat.view(-1, self.num_b, self.num_b) 
+
+
+#self.pos_head: 这是另一个独立的线性层，输出维度为 num_b。它负责为每个 B 元素预测要插入的A的哪个位置
+        pos_preds = self.pos_head(b_features_flat)  
 
         return order_logits, pos_preds
+
+
+
+
+
+训练主函数:
+
+def train_model(train_data, epochs=300, batch_size=64, model_path="transformer.pth",
+                num_a=6, num_b=3, warmup_epochs=10, lr_max=0.0001, lr_min=0.0000005,
+                patience=10, min_delta=0.01):
+    # GPU信息检查
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f"GPU总内存: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.2f} GB")
+        print(f"CUDA版本: {torch.version.cuda}")
+    else:
+        print("警告: 未检测到可用的GPU!")
+
+    global stop_training
+
+    d_model = 256
+    nhead = 4
+    num_encoder_layers = 3
+    dim_feedforward = 512
+    dropout = 0.1
+
+    # 初始化模型，修改input_dim为6
+    model = TransformerMovePredictor(input_dim=6, d_model=d_model, nhead=nhead,
+                                     num_encoder_layers=num_encoder_layers,
+                                     dim_feedforward=dim_feedforward, dropout=dropout,
+                                     num_a=num_a, num_b=num_b).to(device)
+
+    print("模型参数量:", sum(p.numel() for p in model.parameters() if p.requires_grad))
+    print("模型是否在GPU上:", next(model.parameters()).is_cuda)
+
+    optimizer = optim.AdamW(model.parameters(), lr=lr_max, weight_decay=0.01)
+
+    order_criterion = nn.CrossEntropyLoss().to(device)
+    pos_criterion = nn.MSELoss().to(device)
+
+    model.train()
+
+    # 学习率预热 (Warmup) 和 余弦退火调度
+    scheduler_cosine = CosineAnnealingLR(optimizer, T_max=epochs - warmup_epochs, eta_min=lr_min)
+
+    # 早停相关变量
+    best_loss = float('inf')
+    patience_counter = 0
+    best_model_state = None
+
+    try:
+        for epoch in range(epochs):
+            if stop_training:
+                break
+
+            total_loss = 0.0
+            batch_count = 0
+            np.random.shuffle(train_data)
+
+
+
+            for i in range(0, len(train_data), batch_size):
+                if stop_training:
+                    break
+
+                batch = train_data[i:i + batch_size]
+                inputs, order_targets, pos_targets = [], [], []
+
+                for sample in batch:
+                    input_seq, order_tgt, pos_tgt = prepare_data_transformer(sample, num_a=num_a, num_b=num_b)
+                    if input_seq is None:
+                        continue
+                    inputs.append(input_seq)
+                    order_targets.append(order_tgt)
+                    pos_targets.append(pos_tgt)
+
+                if not inputs:
+                    continue
+
+                inputs = torch.FloatTensor(np.array(inputs)).to(device)
+                order_targets = torch.LongTensor(np.array(order_targets)).to(device)
+                pos_targets = torch.FloatTensor(np.array(pos_targets)).to(device)
+
+                      # 在训练前，根据学习率预热策略更新学习率
+                if epoch < warmup_epochs:
+                    new_lr = lr_warmup(epoch, lr_max, warmup_epochs)
+                else:
+                    # 余弦退火调度
+                    new_lr = scheduler_cosine.get_lr()[0]  # 获取当前余弦退火后的学习率
+
+                # 更新学习率
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = new_lr
+
+                optimizer.zero_grad()
+                order_logits, pos_preds = model(inputs)
+
+                # 计算损失
+                order_loss = order_criterion(order_logits, order_targets)
+                pos_loss = pos_criterion(pos_preds, pos_targets)
+
+                loss = order_loss + pos_loss
+
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+
+                total_loss += loss.item()
+                batch_count += 1
+
+                # 每个batch的训练日志
+                if batch_count % 10 == 0:  # 每10个batch打印一次
+                    print(f"    Batch {batch_count}/{len(train_data)//batch_size}, Loss: {loss.item():.4f},LR: {new_lr:.7f}")
+
+            # 在每个epoch后更新余弦退火学习率
+            if epoch >= warmup_epochs:
+                scheduler_cosine.step()
+
+            avg_loss = total_loss / batch_count if batch_count > 0 else total_loss
+            print(f"Epoch {epoch + 1}/{epochs}, Average Loss: {avg_loss:.4f}, LR: {new_lr:.7f}")
+
+            # 早停检查
+            if avg_loss < best_loss - min_delta:  # 有显著改善
+                best_loss = avg_loss
+                patience_counter = 0
+                # 保存当前最佳模型状态
+                best_model_state = model.state_dict().copy()
+                print(f"发现新的最佳模型，损失值: {best_loss:.4f}")
+            else:  # 没有显著改善
+                patience_counter += 1
+                print(f"未发现显著改善，耐心计数: {patience_counter}/{patience}")
+
+                if patience_counter >= patience:
+                    print(f"早停触发！连续 {patience} 个epoch无显著改善")
+                    # 恢复到最佳模型状态
+                    if best_model_state is not None:
+                        model.load_state_dict(best_model_state)
+                    break
+
+    except KeyboardInterrupt:
+        print("\n训练手动中断，正在保存当前模型...")
+
+    except Exception as e:
+        print(f"\n训练过程中发生错误: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+    finally:
+        # 确保无论发生什么情况，模型都会被保存
+        try:
+            # 如果触发了早停并有最佳模型，确保我们使用最佳模型
+            if patience_counter >= patience and best_model_state is not None:
+                model.load_state_dict(best_model_state)
+                print("已加载训练过程中的最佳模型状态")
+
+            torch.save(model.state_dict(), model_path)
+            print(f"Transformer 模型已保存至 {model_path}")
+        except Exception as save_error:
+            print(f"保存模型时发生错误: {str(save_error)}")
+
+    return model

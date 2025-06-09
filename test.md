@@ -5,7 +5,7 @@
 
 - 在最开始,我想设计一个有些创新的,并且规则简单,比较依赖运气但是也需要策略的卡牌游戏  所以我设计了这个游戏,将游戏规则抽象为算法问题,然后编程实现它   游戏规则与“连连看”或者"消消乐"类似，玩家需要通过配对卡牌来消除它们获得得分，但玩法上进行了创新。具体的游戏规则详见第一部分中的游戏规则,篇文章的重点会放在算法,AI模型和软件架构上
 
-- 相对于一篇严格的学术论文而言 本文更像是一个完成度较高的项目报告，我平衡了深度与广度,在涉及较多技术面的同时做了一些创新和进一步的讨论,希望能证明我的基础计算机知识是较为全面且合格的
+- 相对于一篇严格的学术论文而言 本文更像是一个完成度较高的项目报告，我平衡了深度与广度,在涉及较多技术面的同时做了一些创新和进一步的讨论
 
 ## 技术亮点
 - **算法分析**：将游戏的最大得分问题抽象为算法问题,并进行了详细的分析 ,以此说明代理模型的重要性
@@ -32,10 +32,10 @@
 本部分将详细介绍游戏中 AI 系统的工作原理,，包括：
 
 - **AI模型的选择**：
--**模型编程实现以及优化**：python语言实现
-- **模型训练**：
+- **模型编程实现以及优化**
+- **模型训练**
 
-- **模型评测**：
+- **模型评测**
 
 
 
@@ -1409,7 +1409,7 @@ transformer模型框架概述
         val / A_sum: 元素值占A序列总和的比例。
         is_in_intersection: 该元素是否存在于A和B的交集中 (1.0 or 0.0)。
         i / num_a: 元素在A序列内部的相对位置。
-        val / A_sum: 再次使用元素值占A序列总和的比例 (可能是一个特征的重复或者有特定含义，需要结合问题背景理解)。
+        val / A_sum: 再次使用元素值占A序列总和的比例 
         intersection_size / num_b: A和B交集的大小与B序列长度的比例。
 
     对于B中的元素 val (在B中的索引为 i):
@@ -1444,33 +1444,29 @@ transformer模型框架概述
 
  模型预测与后处理
 
-    Transformer_predict(A, B, model, ...) 函数:
-        使用训练好的模型对单个 (A, B) 样本进行预测。
+    Transformer_predict_batch(A, B, model, ...) 函数:
+        对prepare_data_transformer的批量处理优化版本（Batch Inference Optimization）
+
+        使用训练好的模型对单个 (A, B) 样本进行批量预测，优化GPU利用率
         特征工程: 执行与 prepare_data_transformer 中完全一致的特征构建。
         模型推理: 在 torch.no_grad() 环境下获取模型原始输出。
         后处理:
             sample_order: 从 order_logits 解码出有效的B元素处理顺序（处理潜在的重复预测）。
             np.clip: 将 pos_preds 预测的连续位置值裁剪到有效整数范围内。
         返回预测的 best_moves (策略) 和该策略的 pred_score。
-        包含一个“快速路径”优化，启发式方法,对某些简单情况（如A、B无交集且B无重复）直接返回默认策略。
-    Transformer_predict_batch(A_batch, B_batch, model, ...) 函数:
-        对一批 (A, B) 样本进行高效的批量预测，优化GPU利用率。
-        内部逻辑与单样本预测类似，但特征工程和模型调用是批量进行的。
+        包含一个“快速路径”优化，启发式方法,对某些简单情况（如A、B无交集且B无重复）直接返回默认策略。(类似遗传算法的future_score的启发式方法)
+  
 
- 训练配置 (示例)
 
-    固定序列长度: A 长度为 6, B 长度为 3。
-    输入特征维度: 每个序列元素有 6 维特征。
-    Epochs: 100 (可调)
-    Batch Size: 8192 (可调，较大)
-    学习率: 最大 0.0005, 最小 1e-7, 预热 5 epochs (可调)
-    早停耐心: 5 epochs (可调)
 
 输出结果
 
     训练完成后，生成一个 .pth 文件,包含训练好的 TransformerMovePredictor 模型的权重参数。这个文件可用于后续的策略预测。
 
-transformer核心函数实现(大多数是transformer的经典实现):
+
+
+
+### transformer核心函数实现(大多数是transformer的标准实现):
 
 class PositionalEncoding(nn.Module):
     # 确保 max_len >= num_a + num_b (6 + 3 = 9)
@@ -1614,159 +1610,616 @@ class TransformerMovePredictor(nn.Module):
 
 
 
+
+def prepare_data_transformer(sample: dict, num_a=6, num_b=3):
+    """
+    数据预处理：构建输入序列和目标输出，添加修改后的特征工程。
+    """
+
+
+    A = sample["A"]
+    B = sample["B"]
+    best_moves = sample["best_moves"]
+
+    if len(A) != num_a or len(B) != num_b:
+        print(f"Warning: Skipping sample with A={A}, B={B} due to unexpected length (expected A:{num_a}, B:{num_b}).")
+        return None, None, None
+
+    # 新增特征计算
+    A_sum = sum(A)  # A序列的和
+
+
+    # 计算B序列中重复的元素数
+    B_counter = {}
+    for val in B:
+        B_counter[val] = B_counter.get(val, 0) + 1
+    B_duplicates = sum(count - 1 for count in B_counter.values())  # 重复的元素数
+
+    # 交集特征
+    intersection = set(A) & set(B)
+    intersection_size = len(intersection)
+
+    # 位置特征
+    positions_in_A = {}
+    for i, a_val in enumerate(A):
+        positions_in_A[a_val] = i
+
+    # 创建增强的输入序列
+    enhanced_sequence = []
+
+    # 处理A序列
+    for i, val in enumerate(A):
+        is_in_intersection = 1.0 if val in intersection else 0.0
+        relative_position = i / num_a
+        relative_size = val / A_sum if A_sum != 0 else 0  # 使用与总和的比例代替相对大小
+        intersection_ratio = intersection_size / num_b
+
+        enhanced_sequence.append([
+            val,  # 原始值
+            val / A_sum if A_sum != 0 else 0,  # 值占A总和的比例
+            is_in_intersection,  # 是否在交集中
+            relative_position,  # 相对位置
+            relative_size,  # 相对大小（占总和的比例）
+            intersection_ratio  # 交集大小比例
+        ])
+
+    # 处理B序列
+    for i, val in enumerate(B):
+        is_in_A = 1.0 if val in A else 0.0
+        position_in_A = positions_in_A.get(val, -1)
+        relative_position_in_A = position_in_A / num_a if position_in_A >= 0 else -0.1
+        # relative_size = val / B_sum if B_sum != 0 else 0  # 使用与总和的比例
+
+        # 计算未来得分特征
+        # 假设当前B[i]已经被处理，计算剩余B的未来得分
+        remaining_B = B[i + 1:] if i < len(B) - 1 else []
+        future_score = calculate_future_score(A, remaining_B)
+        future_score_ratio = future_score / (sum(A) + sum(B)) if (sum(A) + sum(B)) > 0 else 0
+
+        enhanced_sequence.append([
+            val,  # 原始值
+            # val / B_sum if B_sum != 0 else 0,  # 值占B总和的比例
+            future_score_ratio,  # 新增：未来得分比例
+
+            is_in_A,  # 是否在A中
+            relative_position_in_A,  # 在A中的相对位置（如果存在）
+            B_duplicates / num_b,  # B中重复元素的比例
+
+            intersection_ratio  # 交集大小比例
+        ])
+
+    # 将序列转换为numpy数组
+    input_sequence = np.array(enhanced_sequence, dtype=np.float32)
+
+    order_target = np.array([move[0] for move in best_moves], dtype=np.int64)
+    pos_target = np.array([move[1] for move in best_moves], dtype=np.float32)
+
+    if len(set(order_target)) != num_b:
+        print(f"Warning: Skipping sample with invalid order target in best_moves: {order_target}")
+        return None, None, None
+
+
+    result = (input_sequence, order_target, pos_target)
+
+
+    return result
+
+
+
+
+
+def Transformer_predict_batch(A_batch, B_batch, model, num_a=6, num_b=3, device='cuda'):
+    """
+    批量使用训练好的 Transformer 模型进行预测 (针对 A=6, B=3)。
+
+    参数:
+        A_batch: 列表的列表，每个内部列表是一个A序列，长度为num_a
+        B_batch: 列表的列表，每个内部列表是一个B序列，长度为num_b
+        model: TransformerMovePredictor模型实例
+        num_a: A序列的长度，默认为6
+        num_b: B序列的长度，默认为3
+        device: 计算设备，默认为'cuda'
+
+    返回:
+        两个列表: (moves_batch, scores_batch)
+    """
+    try:
+        batch_size = len(A_batch)
+        moves_batch = []
+        scores_batch = []
+
+
+
+        model.eval()
+
+        # 分类样本：快速路径和需要模型推理的
+        fast_path_indices = []
+        model_inference_indices = []
+
+        for i in range(batch_size):
+            A = A_batch[i]
+            B = B_batch[i]
+
+            # 检查长度
+            if len(A) != num_a or len(B) != num_b:
+                raise ValueError("value of A or B is not equal to num_a or num_b")
+
+            # 快速路径检查
+            if not set(A) & set(B) and len(B) == len(set(B)):
+                fast_path_indices.append(i)
+            else:
+                model_inference_indices.append(i)
+
+        # 初始化结果列表，使其长度与batch_size相同
+        moves_batch = [None] * batch_size
+        scores_batch = [None] * batch_size
+
+        # 处理快速路径样本
+        for idx in fast_path_indices:
+            moves_batch[idx] = [[0, 0], [1, 0], [2, 0]]
+            scores_batch[idx] = 0
+
+        # 如果没有需要模型推理的样本，直接返回
+        if not model_inference_indices:
+            return moves_batch, scores_batch
+
+        # 准备模型推理的批量数据
+        all_features = []
+
+        for idx in model_inference_indices:
+            A = A_batch[idx]
+            B = B_batch[idx]
+
+            # 1. 计算序列和
+            A_sum = sum(A)
+
+            # 2. 计算B序列中重复的元素数
+            B_counter = {}
+            for val in B:
+                B_counter[val] = B_counter.get(val, 0) + 1
+            B_duplicates = sum(count - 1 for count in B_counter.values())
+
+            # 3. 交集特征
+            intersection = set(A) & set(B)
+            intersection_size = len(intersection)
+
+            # 4. 位置特征
+            positions_in_A = {}
+            for i, a_val in enumerate(A):
+                positions_in_A[a_val] = i
+
+            # 创建增强的输入序列
+            enhanced_sequence = []
+
+            # 处理A序列
+            for i, val in enumerate(A):
+                is_in_intersection = 1.0 if val in intersection else 0.0
+                relative_position = i / num_a
+                relative_size = val / A_sum if A_sum != 0 else 0
+                intersection_ratio = intersection_size / num_b
+
+                enhanced_sequence.append([
+                    val,  # 原始值
+                    val / A_sum if A_sum != 0 else 0,  # 值占A总和的比例
+                    is_in_intersection,  # 是否在交集中
+                    relative_position,  # 相对位置
+                    relative_size,  # 相对大小（占总和的比例）
+                    intersection_ratio  # 交集大小比例
+                ])
+
+            # 处理B序列
+            for i, val in enumerate(B):
+                is_in_A = 1.0 if val in A else 0.0
+                position_in_A = positions_in_A.get(val, -1)
+                relative_position_in_A = position_in_A / num_a if position_in_A >= 0 else -0.1
+
+                # 计算未来得分特征
+                remaining_B = B[i + 1:] if i < len(B) - 1 else []
+                future_score = calculate_future_score(A, remaining_B)
+                future_score_ratio = future_score / (sum(A) + sum(B)) if (sum(A) + sum(B)) > 0 else 0
+
+                enhanced_sequence.append([
+                    val,  # 原始值
+                    future_score_ratio,  # 未来得分比例
+                    is_in_A,  # 是否在A中
+                    relative_position_in_A,  # 在A中的相对位置（如果存在）
+                    B_duplicates / num_b,  # B中重复元素的比例
+                    intersection_ratio  # 交集大小比例
+                ])
+
+            all_features.append(enhanced_sequence)
+
+        # 转换为批量张量并送入GPU
+        input_tensor = torch.FloatTensor(np.array(all_features, dtype=np.float32)).to(device)
+
+        # 批量推理
+        with torch.no_grad():
+            order_logits, pos_preds = model(input_tensor)
+
+        # 处理每个样本的结果
+        for batch_idx, original_idx in enumerate(model_inference_indices):
+            A = A_batch[original_idx]
+            B = B_batch[original_idx]
+
+            # 获取该样本的预测结果
+            sample_order_logits = order_logits[batch_idx].unsqueeze(0)
+            sample_pos_preds = pos_preds[batch_idx].unsqueeze(0)
+
+            # 使用与原始函数相同的后处理逻辑
+            pred_order_indices = sample_order(sample_order_logits).squeeze(0).cpu().numpy()
+            pred_moves_raw = sample_pos_preds.squeeze(0).cpu().numpy()
+
+            pos_range_base = len(A)
+            pred_moves_clipped = [int(np.clip(p, 0, pos_range_base + k)) for k, p in enumerate(pred_moves_raw)]
+
+            best_moves = [[int(pred_order_indices[k]), pred_moves_clipped[k]] for k in range(num_b)]
+
+            # final_order = [move[0] for move in best_moves]
+            # final_moves = [move[1] for move in best_moves]
+
+            # pred_score = calculate_score(A, B, final_order, final_moves)
+
+            # 保存结果
+            moves_batch[original_idx] = best_moves
+            # scores_batch[original_idx] = pred_score
+
+        return moves_batch
+
+    except Exception as e:
+        print(f"批量使用 Transformer 预测时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("返回默认策略")
+
+        # 对于错误情况，为每个样本返回默认策略
+        moves_batch = []
+        scores_batch = []
+        for i in range(batch_size):
+            A = A_batch[i]
+            B = B_batch[i]
+            default_strategy = [[j, 1] for j in range(len(B))]
+            default_score = calculate_score_by_strategy(A, B, default_strategy)
+            moves_batch.append(default_strategy)
+            scores_batch.append(default_score)
+
+        return moves_batch, scores_batch
+_json_cache = {}
+
+
+
 训练主函数:
 
 def train_model(train_data, epochs=300, batch_size=64, model_path="transformer.pth",
                 num_a=6, num_b=3, warmup_epochs=10, lr_max=0.0001, lr_min=0.0000005,
                 patience=10, min_delta=0.01):
-    # GPU信息检查
+    """
+    训练Transformer模型的主函数
+    
+    参数说明:
+    - train_data: 训练数据集
+    - epochs: 训练轮数，默认300轮
+    - batch_size: 批次大小，默认64
+    - model_path: 模型保存路径
+    - num_a, num_b: 模型特定参数
+    - warmup_epochs: 学习率预热轮数，默认10轮
+    - lr_max: 最大学习率，默认0.0001
+    - lr_min: 最小学习率，默认0.0000005
+    - patience: 早停耐心值，默认10轮
+    - min_delta: 早停的最小改善阈值，默认0.01
+    """
+    
+    # ==================== GPU硬件信息检查 ====================
     if torch.cuda.is_available():
+        # 打印GPU设备名称
         print(f"GPU: {torch.cuda.get_device_name(0)}")
-        print(f"GPU总内存: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.2f} GB")
-        print(f"CUDA版本: {torch.version.cuda}")
+        # 打印GPU总内存（转换为GB单位）
+        print(f"GPU Total Memory: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.2f} GB")
+        # 打印CUDA版本信息
+        print(f"CUDA Version: {torch.version.cuda}")
     else:
-        print("警告: 未检测到可用的GPU!")
+        print("Warning: No available GPU detected!")
 
+    # 全局停止训练标志
     global stop_training
 
-    d_model = 256
-    nhead = 4
-    num_encoder_layers = 3
-    dim_feedforward = 512
-    dropout = 0.1
+    # ==================== Transformer模型超参数配置 ====================
+    d_model = 256           # 模型维度 (model dimension)
+    nhead = 4              # 多头注意力头数 (number of attention heads)
+    num_encoder_layers = 3  # 编码器层数 (number of encoder layers)
+    dim_feedforward = 512   # 前馈网络维度 (feedforward network dimension)
+    dropout = 0.1          # Dropout比率，用于防止过拟合
 
-    # 初始化模型，修改input_dim为6
+    # ==================== 模型初始化 ====================
+    # 创建TransformerMovePredictor模型实例
+    # input_dim=6: 输入特征维度为6
     model = TransformerMovePredictor(input_dim=6, d_model=d_model, nhead=nhead,
                                      num_encoder_layers=num_encoder_layers,
                                      dim_feedforward=dim_feedforward, dropout=dropout,
                                      num_a=num_a, num_b=num_b).to(device)
 
-    print("模型参数量:", sum(p.numel() for p in model.parameters() if p.requires_grad))
-    print("模型是否在GPU上:", next(model.parameters()).is_cuda)
-
+    # ==================== 优化器和损失函数配置 ====================
+    # 使用AdamW优化器，包含权重衰减正则化
     optimizer = optim.AdamW(model.parameters(), lr=lr_max, weight_decay=0.01)
 
-    order_criterion = nn.CrossEntropyLoss().to(device)
-    pos_criterion = nn.MSELoss().to(device)
+    # 定义损失函数
+    order_criterion = nn.CrossEntropyLoss().to(device)  # 用于分类任务的交叉熵损失
+    pos_criterion = nn.MSELoss().to(device)             # 用于回归任务的均方误差损失
 
+    # 设置模型为训练模式
     model.train()
 
-    # 学习率预热 (Warmup) 和 余弦退火调度
+    # ==================== 学习率调度器配置 ====================
+    # 余弦退火学习率调度器 (Cosine Annealing)
+    # T_max: 余弦退火的周期长度（总轮数减去预热轮数）
+    # eta_min: 学习率的最小值
     scheduler_cosine = CosineAnnealingLR(optimizer, T_max=epochs - warmup_epochs, eta_min=lr_min)
 
-    # 早停相关变量
-    best_loss = float('inf')
-    patience_counter = 0
-    best_model_state = None
+    # ==================== 早停机制变量初始化 ====================
+    best_loss = float('inf')  # 记录最佳损失值，初始化为无穷大
+    patience_counter = 0      # 耐心计数器，记录连续无改善的轮数
+    best_model_state = None   # 保存最佳模型的状态字典
 
     try:
+        # ==================== 主训练循环 ====================
         for epoch in range(epochs):
+            # 检查是否需要停止训练
             if stop_training:
                 break
 
-            total_loss = 0.0
-            batch_count = 0
+            # 初始化当前轮次的统计变量
+            total_loss = 0.0  # 累计损失
+            batch_count = 0   # 批次计数
+            
+            # 随机打乱训练数据，增加训练的随机性
             np.random.shuffle(train_data)
 
-
-
+            # ==================== 批次训练循环 ====================
             for i in range(0, len(train_data), batch_size):
+                # 检查是否需要停止训练
                 if stop_training:
                     break
 
+                # 获取当前批次的数据
                 batch = train_data[i:i + batch_size]
                 inputs, order_targets, pos_targets = [], [], []
 
+                # ==================== 数据预处理 ====================
+                # 遍历批次中的每个样本
                 for sample in batch:
+                    # 准备Transformer输入数据
                     input_seq, order_tgt, pos_tgt = prepare_data_transformer(sample, num_a=num_a, num_b=num_b)
                     if input_seq is None:
-                        continue
+                        continue  # 跳过无效样本
                     inputs.append(input_seq)
                     order_targets.append(order_tgt)
                     pos_targets.append(pos_tgt)
 
+                # 如果当前批次没有有效数据，跳过
                 if not inputs:
                     continue
 
+                # ==================== 数据转换为张量 ====================
+                # 转换为PyTorch张量并移动到GPU
                 inputs = torch.FloatTensor(np.array(inputs)).to(device)
                 order_targets = torch.LongTensor(np.array(order_targets)).to(device)
                 pos_targets = torch.FloatTensor(np.array(pos_targets)).to(device)
 
-                      # 在训练前，根据学习率预热策略更新学习率
+                # ==================== 学习率调度 ====================
+                # 学习率预热阶段 (Warmup Phase)
                 if epoch < warmup_epochs:
+                    # 使用线性预热策略
                     new_lr = lr_warmup(epoch, lr_max, warmup_epochs)
                 else:
-                    # 余弦退火调度
-                    new_lr = scheduler_cosine.get_lr()[0]  # 获取当前余弦退火后的学习率
+                    # 预热结束后使用余弦退火调度
+                    new_lr = scheduler_cosine.get_lr()[0]
 
-                # 更新学习率
+                # 更新优化器中所有参数组的学习率
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = new_lr
 
-                optimizer.zero_grad()
-                order_logits, pos_preds = model(inputs)
+                # ==================== 前向传播 ====================
+                optimizer.zero_grad()  # 清零梯度
+                order_logits, pos_preds = model(inputs)  # 模型前向传播
 
-                # 计算损失
+                # ==================== 损失计算 ====================
+                # 计算分类任务损失（顺序预测）
                 order_loss = order_criterion(order_logits, order_targets)
+                # 计算回归任务损失（位置预测）
                 pos_loss = pos_criterion(pos_preds, pos_targets)
-
+                # 总损失为两个任务损失之和
                 loss = order_loss + pos_loss
 
-                loss.backward()
+                # ==================== 反向传播和参数更新 ====================
+                loss.backward()  # 反向传播计算梯度
+                # 梯度裁剪，防止梯度爆炸
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
+                optimizer.step()  # 更新模型参数
 
+                # 累计损失和批次计数
                 total_loss += loss.item()
                 batch_count += 1
 
-                # 每个batch的训练日志
-                if batch_count % 10 == 0:  # 每10个batch打印一次
-                    print(f"    Batch {batch_count}/{len(train_data)//batch_size}, Loss: {loss.item():.4f},LR: {new_lr:.7f}")
+                # ==================== 训练进度日志 ====================
+                # 每10个批次打印一次训练状态
+                if batch_count % 10 == 0:
+                    print(f"    Batch {batch_count}/{len(train_data)//batch_size}, Loss: {loss.item():.4f}, LR: {new_lr:.7f}")
 
-            # 在每个epoch后更新余弦退火学习率
+            # ==================== 轮次结束后的学习率更新 ====================
+            # 如果已过预热阶段，执行余弦退火调度
             if epoch >= warmup_epochs:
                 scheduler_cosine.step()
 
+            # ==================== 轮次统计和日志 ====================
+            # 计算当前轮次的平均损失
             avg_loss = total_loss / batch_count if batch_count > 0 else total_loss
             print(f"Epoch {epoch + 1}/{epochs}, Average Loss: {avg_loss:.4f}, LR: {new_lr:.7f}")
 
-            # 早停检查
-            if avg_loss < best_loss - min_delta:  # 有显著改善
+            # ==================== 早停检查机制 ====================
+            # 检查是否有显著改善（损失下降超过最小阈值）
+            if avg_loss < best_loss - min_delta:
+                # 发现新的最佳模型
                 best_loss = avg_loss
-                patience_counter = 0
-                # 保存当前最佳模型状态
+                patience_counter = 0  # 重置耐心计数器
+                # 深拷贝保存当前最佳模型状态
                 best_model_state = model.state_dict().copy()
-                print(f"发现新的最佳模型，损失值: {best_loss:.4f}")
-            else:  # 没有显著改善
+                print(f"Found new best model with loss: {best_loss:.4f}")
+            else:
+                # 没有显著改善
                 patience_counter += 1
-                print(f"未发现显著改善，耐心计数: {patience_counter}/{patience}")
+                print(f"No significant improvement, patience counter: {patience_counter}/{patience}")
 
+                # 检查是否触发早停条件
                 if patience_counter >= patience:
-                    print(f"早停触发！连续 {patience} 个epoch无显著改善")
-                    # 恢复到最佳模型状态
+                    print(f"Early stopping triggered! No significant improvement for {patience} consecutive epochs")
+                    # 恢复到训练过程中的最佳模型状态
                     if best_model_state is not None:
                         model.load_state_dict(best_model_state)
-                    break
+                    break  # 结束训练循环
 
+    # ==================== 异常处理 ====================
     except KeyboardInterrupt:
-        print("\n训练手动中断，正在保存当前模型...")
+        # 捕获键盘中断（Ctrl+C）
+        print("\nTraining manually interrupted, saving current model...")
 
     except Exception as e:
-        print(f"\n训练过程中发生错误: {str(e)}")
+        # 捕获其他所有异常
+        print(f"\nError occurred during training: {str(e)}")
         import traceback
-        traceback.print_exc()
+        traceback.print_exc()  # 打印详细的错误堆栈
 
     finally:
-        # 确保无论发生什么情况，模型都会被保存
+        # ==================== 模型保存 ====================
+        # 无论训练如何结束，都确保模型被保存
         try:
-            # 如果触发了早停并有最佳模型，确保我们使用最佳模型
+            # 如果触发了早停并且有最佳模型状态，使用最佳模型
             if patience_counter >= patience and best_model_state is not None:
                 model.load_state_dict(best_model_state)
-                print("已加载训练过程中的最佳模型状态")
+                print("Best model state from training process loaded")
 
+            # 保存模型状态字典到指定路径
             torch.save(model.state_dict(), model_path)
-            print(f"Transformer 模型已保存至 {model_path}")
+            print(f"Transformer model saved to {model_path}")
+            
         except Exception as save_error:
-            print(f"保存模型时发生错误: {str(save_error)}")
+            # 捕获保存过程中的错误
+            print(f"Error occurred while saving model: {str(save_error)}")
 
+    # 返回训练完成的模型
     return model
+
+
+transformer生成的pth格式模型有很强的黑箱性质 所以这里我们不直接分析它
+
+
+现在我们完成了遗传算法和transformer 的训练  接着我们要来比较得到的结果    
+
+
+我是这样评估两个模型的:
+
+评估流程详解
+
+整个评估流程由核心函数 Compare_TwoModel 驱动，可以分解为以下几个关键步骤：
+1. 初始化与循环测试
+
+    设定测试轮数 (rounds): 函数接收一个 rounds 参数（默认为1000），决定了要进行多少轮独立的测试。大量的测试轮数可以确保评估结果的统计稳定性，避免偶然性。
+    循环生成测试用例: 在每一轮循环中，通过 deal_cards_tool() 函数生成一组新的测试数据 A 和 B。这可以理解为“牌局的初始手牌（A）”和“需要依次打出的牌（B）”。每一轮的数据都是随机独立的，这保证了模型评估的泛化能力。
+
+2. 模型预测与性能记录
+
+对于每一轮生成的 A 和 B：
+
+    调用模型获取策略:
+        TestModel_with_given_A_B(model, A, B) 函数被分别用来测试 genome 模型和 Transformer 模型。
+        在这个函数内部，每个模型（如 genome(A, B)）会根据当前的 A 和 B 状态，预测出一个三步操作的最佳策略 move。这个 move 定义了应该先出 B 中的哪张牌，以及插入到 A 中的哪个位置。
+    计算真实得分:
+        模型返回的仅仅是它认为最好的 策略（move）。代码 不会 信任模型自己预测的分数。
+        而是使用 strategy_TrueScore(A, B, move) 函数，根据模型返回的 move，一步一步地模拟整个出牌过程，并计算出这个策略能够得到的 真实总分。这样做保证了评分的公正性和客观性。
+    记录运行时间: TestModel_with_given_A_B 函数会精确记录每个模型从接收数据到返回策略所花费的时间，用于评估模型的计算效率。
+
+3. 获取“真实值”（Ground Truth）
+
+    在每一轮中，代码还会调用 recursive(A, B) 函数。
+    这个函数内部使用 recursive_StrategyAndScore，通过 暴力递归搜索 的方式，计算出当前 A 和 B 组合下能够得到的 理论最高分（true_score） 和达成该分数的 最优策略（true_move）。
+
+    以可能达到的最佳情况来评估两个模型
+
+4. 数据汇总与分析
+
+当所有 rounds 完成后，代码收集了三组核心数据：genome模型的得分列表、Transformer模型的得分列表，以及每一轮的理论最高分列表。接下来进行详细的数据分析：
+
+    描述性统计 (compute_statistics):
+        对每个模型得分列表和真实值列表，计算并打印出基础统计数据：
+            平均值 (mean): 模型的平均性能。
+            中位数 (median): 排除极端值影响后的典型性能。
+            标准差 (std_dev): 模型性能的稳定性。标准差越小，说明模型性能越稳定。
+            最大/最小值 (min/max): 模型的性能上下限。
+
+    均方误差 (MSE):
+        计算每个模型的得分与真实最高分之间的均方误差。MSE 能很好地度量模型预测的偏差大小，值越小说明模型结果越接近最优解。
+
+    推断性统计检验 (compute_statistical_tests):
+    
+    分析模型得分与真实值之间的 偏差 (Bias)。
+        配对 t-检验 (Paired t-test):
+            用于检验“模型的平均得分”与“真实值的平均分”之间的差异是否 统计上显著。
+            p-value 是核心指标。如果 p < 0.05，则认为模型得分与真实值之间的差异是显著的，而不是由随机因素造成的。
+        效应量分析 (Cohen's d):
+            t-检验只告诉我们差异是否“显著”，但没有说明这个差异有多“大”。
+            Cohen's d 用来衡量差异的 实际大小或影响程度（极小、较小、中等、较大）。这使得评估更具实践意义。
+
+可视化分析
+
+1. 小提琴图 (Violin Plot)
+
+    目的: 展示三组数据（真实值、算法1得分、算法2得分）的 完整分布情况。
+
+
+2. 偏差条形图 (Bias Bar Chart)
+
+    目的: 这是个更高级的分析图，它旨在探究 模型的偏差是否与问题难度（即真实值的高低）有关。
+  
+
+
+
+
+
+
+现在我们回到对于训练集中长度不是严格为3的best_move的处理问题  
+
+获取训练集 代码
+
+def generate_training_data(num_samples=10000):
+    dataset = []
+
+    for i in range(num_samples):
+
+
+
+        A, B = deal_cards_tool()  # 初始A, B   A, B 都是 list<int>
+
+
+        max_score, best_moves = recursive_StrategyAndScore(A, B)
+        print(f"{i} of {num_samples}")
+
+#保证best_move这个二维数组的3个子数组的中第一个元素是互异的 (因为只能操作3次,每次只能是0 1 2其中之一,且每次操作的序号是唯一的)
+        whole = [0, 1, 2]
+        current_rows = set(move[0] for move in best_moves)
+
+        remaining = [i for i in whole if i not in current_rows]
+"""
+这里使用的是"填充"实现
+
+如果使用"跳过"的策略  可以改成  if len(best_moves) != 3: continue
+"""
+        for i in remaining:
+            if len(best_moves) < 3:
+                best_moves.append([i, 0])
+
+
+        dataset.append({"A": A, "B": B, "max_score": max_score, "best_moves": best_moves})
+
+    with open("data.json", "w") as f:
+        json.dump(dataset, f, indent=4)
+
+
+generate_training_data(num_samples=10000)

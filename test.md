@@ -1449,18 +1449,33 @@ transformer模型框架概述
 
  模型预测与后处理
 
-    Transformer_predict_batch(A, B, model, ...) 函数:
-        对prepare_data_transformer的批量处理优化版本（Batch Inference Optimization）
+    Transformer_predict(A, B, model, ...) 函数:
+               
+        # Transformer序列插入预测模型
 
-        使用训练好的模型对单个 (A, B) 样本进行批量预测，优化GPU利用率
-        特征工程: 执行与 prepare_data_transformer 中完全一致的特征构建。
-        模型推理: 在 torch.no_grad() 环境下获取模型原始输出。
-        后处理:
-            sample_order: 从 order_logits 解码出有效的B元素处理顺序（处理潜在的重复预测）。
-            np.clip: 将 pos_preds 预测的连续位置值裁剪到有效整数范围内。
-        返回预测的 best_moves (策略) 和该策略的 pred_score。
-        包含一个“快速路径”优化，启发式方法,对某些简单情况（如A、B无交集且B无重复）直接返回默认策略。(类似遗传算法的future_score的启发式方法)
-  
+## 技术架构
+- **模型类型**: TransformerMovePredictor (自定义Transformer变体)
+- **输入规格**: 固定长度序列 A[6] + B[3]
+- **输出格式**: 双头预测 (顺序logits + 位置回归)
+- **特征维度**: 6维增强特征向量
+
+## 特征工程策略
+
+### A序列特征 (目标序列)
+```
+[原始值, 值比例, 交集标记, 相对位置, 相对大小, 交集比例]
+```
+
+### B序列特征 (插入序列)  
+```
+[原始值, 未来得分比例, 存在标记, A中位置, 重复率, 交集比例]
+```
+
+## 要点
+1. **未来得分预测**: 基于剩余序列的前瞻性评估
+2. **位置约束动态调整**: 插入位置随步骤递增 `pos ∈ [0, len(A)+step]`
+3. **交集感知特征**: 充分利用序列间的重叠信息
+4. **快速路径优化**: 无交集且无重复时直接返回默认策略
 
 
 
@@ -1710,185 +1725,203 @@ def prepare_data_transformer(sample: dict, num_a=6, num_b=3):
     return result
 
 
-
-
-
-def Transformer_predict_batch(A_batch, B_batch, model, num_a=6, num_b=3, device='cuda'):
+def Transformer_predict(A, B, model, num_a=6, num_b=3):
     """
-    批量使用训练好的 Transformer 模型进行预测 (针对 A=6, B=3)。
-
-    参数:
-        A_batch: 列表的列表，每个内部列表是一个A序列，长度为num_a
-        B_batch: 列表的列表，每个内部列表是一个B序列，长度为num_b
-        model: TransformerMovePredictor模型实例
-        num_a: A序列的长度，默认为6
-        num_b: B序列的长度，默认为3
-        device: 计算设备，默认为'cuda'
-
-    返回:
-        两个列表: (moves_batch, scores_batch)
+    使用训练好的 Transformer 模型进行预测 (针对 A=6, B=3)。
+    
+    参数说明:
+    A: 长度为6的序列 - 目标序列，代表游戏中的目标位置或状态
+    B: 长度为3的序列 - 待插入序列，代表需要放置的元素
+    model: 训练好的TransformerMovePredictor模型实例
+    num_a: A序列的预期长度，默认为6
+    num_b: B序列的预期长度，默认为3
+    
+    返回值:
+    tuple: (最佳策略列表, 预测得分)
     """
     try:
-        batch_size = len(A_batch)
-        moves_batch = []
-        scores_batch = []
+        # ==================== 特殊情况快速处理 ====================
+        # 如果A和B没有交集，且B中没有重复元素，使用默认策略
+        # Special case: if A and B have no intersection and B has no duplicates, use default strategy
+        if not set(A) & set(B) and len(B) == len(set(B)):
+            print("快速路径：A、B无交集且B无重复，返回默认策略")
+            # 返回简单的顺序插入策略：[[索引0,位置0], [索引1,位置0], [索引2,位置0]]
+            return [[0, 0], [1, 0], [2, 0]], 0
 
+        # ==================== 模型类型验证 ====================
+        # 确保传入的模型是正确的类型
+        # Ensure the passed model is of correct type
+        if not isinstance(model, TransformerMovePredictor):
+            raise ValueError(f"需要 TransformerMovePredictor 实例, 但得到 {type(model)}")
 
-
+        # 设置模型为评估模式，关闭dropout等训练时的随机性
+        # Set model to evaluation mode, disable dropout and other training randomness
         model.eval()
 
-        # 分类样本：快速路径和需要模型推理的
-        fast_path_indices = []
-        model_inference_indices = []
+        # ==================== 输入长度验证 ====================
+        # 验证输入序列长度是否符合预期
+        # Validate input sequence lengths
+        if len(A) != num_a or len(B) != num_b:
+            raise ValueError(f"DNNpredict 期望输入 A 长度为 {num_a}, B 长度为 {num_b}, 但收到 A:{len(A)}, B:{len(B)}")
 
-        for i in range(batch_size):
-            A = A_batch[i]
-            B = B_batch[i]
+        # ==================== 特征工程 - 基础统计特征 ====================
+        # 1. 计算A序列的总和，用于后续的归一化
+        # Calculate sum of sequence A for normalization
+        A_sum = sum(A)
+        # B_sum = sum(B)  # B序列总和暂时未使用
 
-            # 检查长度
-            if len(A) != num_a or len(B) != num_b:
-                raise ValueError("value of A or B is not equal to num_a or num_b")
+        # 2. 统计B序列中重复元素的数量
+        # Count duplicate elements in sequence B
+        B_counter = {}  # 用字典统计每个元素出现的次数
+        for val in B:
+            B_counter[val] = B_counter.get(val, 0) + 1
+        # 计算重复元素总数：每个元素的重复次数-1之和
+        # Calculate total duplicates: sum of (count-1) for each element
+        B_duplicates = sum(count - 1 for count in B_counter.values())
 
-            # 快速路径检查
-            if not set(A) & set(B) and len(B) == len(set(B)):
-                fast_path_indices.append(i)
-            else:
-                model_inference_indices.append(i)
+        # 3. 计算A和B的交集特征
+        # Calculate intersection features between A and B
+        intersection = set(A) & set(B)  # 求交集
+        intersection_size = len(intersection)  # 交集大小
 
-        # 初始化结果列表，使其长度与batch_size相同
-        moves_batch = [None] * batch_size
-        scores_batch = [None] * batch_size
+        # 4. 建立A序列中每个值对应位置的映射
+        # Create position mapping for values in sequence A
+        positions_in_A = {}
+        for i, a_val in enumerate(A):
+            positions_in_A[a_val] = i  # 记录每个值在A中的位置索引
 
-        # 处理快速路径样本
-        for idx in fast_path_indices:
-            moves_batch[idx] = [[0, 0], [1, 0], [2, 0]]
-            scores_batch[idx] = 0
+        # ==================== 特征工程 - 构建增强输入序列 ====================
+        enhanced_sequence = []  # 用于存储增强后的特征序列
 
-        # 如果没有需要模型推理的样本，直接返回
-        if not model_inference_indices:
-            return moves_batch, scores_batch
+        # -------------------- 处理A序列的特征 --------------------
+        # Process features for sequence A
+        for i, val in enumerate(A):
+            # 判断当前值是否在交集中
+            # Check if current value is in intersection
+            is_in_intersection = 1.0 if val in intersection else 0.0
+            
+            # 计算相对位置：当前位置/总长度
+            # Calculate relative position: current_index / total_length
+            relative_position = i / num_a
+            
+            # 计算相对大小：当前值/总和
+            # Calculate relative size: current_value / total_sum
+            relative_size = val / A_sum if A_sum != 0 else 0
+            
+            # 交集比例：交集大小/B序列长度
+            # Intersection ratio: intersection_size / B_sequence_length
+            intersection_ratio = intersection_size / num_b
 
-        # 准备模型推理的批量数据
-        all_features = []
+            # 为A序列的每个元素构建6维特征向量
+            # Build 6-dimensional feature vector for each element in A
+            enhanced_sequence.append([
+                val,                    # 特征1：原始值 (original value)
+                val / A_sum if A_sum != 0 else 0,  # 特征2：值占A总和的比例 (value ratio in A)
+                is_in_intersection,     # 特征3：是否在交集中 (whether in intersection)
+                relative_position,      # 特征4：相对位置 (relative position)
+                relative_size,          # 特征5：相对大小 (relative size)
+                intersection_ratio      # 特征6：交集大小比例 (intersection ratio)
+            ])
 
-        for idx in model_inference_indices:
-            A = A_batch[idx]
-            B = B_batch[idx]
+        # -------------------- 处理B序列的特征 --------------------
+        # Process features for sequence B
+        for i, val in enumerate(B):
+            # 判断B中的值是否存在于A中
+            # Check if value in B exists in A
+            is_in_A = 1.0 if val in A else 0.0
+            
+            # 获取该值在A中的位置（如果存在）
+            # Get position of this value in A (if exists)
+            position_in_A = positions_in_A.get(val, -1)  # 不存在则返回-1
+            
+            # 计算在A中的相对位置
+            # Calculate relative position in A
+            relative_position_in_A = position_in_A / num_a if position_in_A >= 0 else -0.1
+            
+            # 计算未来得分特征：基于当前位置之后剩余的B序列
+            # Calculate future score feature based on remaining B sequence
+            remaining_B = B[i + 1:] if i < len(B) - 1 else []  # 获取当前位置后的剩余序列
+            future_score = calculate_future_score(A, remaining_B)  # 计算未来可能得分
+            
+            # 归一化未来得分
+            # Normalize future score
+            future_score_ratio = future_score / (sum(A) + sum(B)) if (sum(A) + sum(B)) > 0 else 0
+            
+            # 为B序列的每个元素构建6维特征向量
+            # Build 6-dimensional feature vector for each element in B
+            enhanced_sequence.append([
+                val,                        # 特征1：原始值 (original value)
+                future_score_ratio,         # 特征2：未来得分比例 (future score ratio)
+                is_in_A,                   # 特征3：是否在A中 (whether in A)
+                relative_position_in_A,     # 特征4：在A中的相对位置 (relative position in A)
+                B_duplicates / num_b,       # 特征5：B中重复元素的比例 (duplicate ratio in B)
+                intersection_ratio          # 特征6：交集大小比例 (intersection ratio)
+            ])
 
-            # 1. 计算序列和
-            A_sum = sum(A)
+        # ==================== 模型推理 ====================
+        # 将增强特征序列转换为numpy数组，然后转为PyTorch张量
+        # Convert enhanced feature sequence to numpy array, then to PyTorch tensor
+        input_sequence = np.array(enhanced_sequence, dtype=np.float32)
+        input_tensor = torch.FloatTensor(input_sequence).unsqueeze(0).to(device)  # 添加batch维度并移至GPU
 
-            # 2. 计算B序列中重复的元素数
-            B_counter = {}
-            for val in B:
-                B_counter[val] = B_counter.get(val, 0) + 1
-            B_duplicates = sum(count - 1 for count in B_counter.values())
-
-            # 3. 交集特征
-            intersection = set(A) & set(B)
-            intersection_size = len(intersection)
-
-            # 4. 位置特征
-            positions_in_A = {}
-            for i, a_val in enumerate(A):
-                positions_in_A[a_val] = i
-
-            # 创建增强的输入序列
-            enhanced_sequence = []
-
-            # 处理A序列
-            for i, val in enumerate(A):
-                is_in_intersection = 1.0 if val in intersection else 0.0
-                relative_position = i / num_a
-                relative_size = val / A_sum if A_sum != 0 else 0
-                intersection_ratio = intersection_size / num_b
-
-                enhanced_sequence.append([
-                    val,  # 原始值
-                    val / A_sum if A_sum != 0 else 0,  # 值占A总和的比例
-                    is_in_intersection,  # 是否在交集中
-                    relative_position,  # 相对位置
-                    relative_size,  # 相对大小（占总和的比例）
-                    intersection_ratio  # 交集大小比例
-                ])
-
-            # 处理B序列
-            for i, val in enumerate(B):
-                is_in_A = 1.0 if val in A else 0.0
-                position_in_A = positions_in_A.get(val, -1)
-                relative_position_in_A = position_in_A / num_a if position_in_A >= 0 else -0.1
-
-                # 计算未来得分特征
-                remaining_B = B[i + 1:] if i < len(B) - 1 else []
-                future_score = calculate_future_score(A, remaining_B)
-                future_score_ratio = future_score / (sum(A) + sum(B)) if (sum(A) + sum(B)) > 0 else 0
-
-                enhanced_sequence.append([
-                    val,  # 原始值
-                    future_score_ratio,  # 未来得分比例
-                    is_in_A,  # 是否在A中
-                    relative_position_in_A,  # 在A中的相对位置（如果存在）
-                    B_duplicates / num_b,  # B中重复元素的比例
-                    intersection_ratio  # 交集大小比例
-                ])
-
-            all_features.append(enhanced_sequence)
-
-        # 转换为批量张量并送入GPU
-        input_tensor = torch.FloatTensor(np.array(all_features, dtype=np.float32)).to(device)
-
-        # 批量推理
+        # 使用torch.no_grad()关闭梯度计算，提高推理效率
+        # Use torch.no_grad() to disable gradient computation for efficiency
         with torch.no_grad():
+            # 模型前向传播，获取顺序逻辑值和位置预测
+            # Forward pass: get order logits and position predictions
             order_logits, pos_preds = model(input_tensor)
 
-        # 处理每个样本的结果
-        for batch_idx, original_idx in enumerate(model_inference_indices):
-            A = A_batch[original_idx]
-            B = B_batch[original_idx]
+        # ==================== 结果处理 ====================
+        # 从顺序逻辑值中采样得到预测的插入顺序
+        # Sample insertion order from order logits
+        pred_order_indices = sample_order(order_logits).squeeze(0).cpu().numpy()
+        
+        # 获取位置预测结果
+        # Get position predictions
+        pred_moves_raw = pos_preds.squeeze(0).cpu().numpy()
 
-            # 获取该样本的预测结果
-            sample_order_logits = order_logits[batch_idx].unsqueeze(0)
-            sample_pos_preds = pos_preds[batch_idx].unsqueeze(0)
+        # 限制位置预测在有效范围内
+        # Clip position predictions to valid range
+        pos_range_base = len(A)  # 基础位置范围
+        # 对每个位置预测进行裁剪：范围从0到(基础范围+当前步骤)
+        # Clip each position prediction: range from 0 to (base_range + current_step)
+        pred_moves_clipped = [int(np.clip(p, 0, pos_range_base + k)) for k, p in enumerate(pred_moves_raw)]
 
-            # 使用与原始函数相同的后处理逻辑
-            pred_order_indices = sample_order(sample_order_logits).squeeze(0).cpu().numpy()
-            pred_moves_raw = sample_pos_preds.squeeze(0).cpu().numpy()
+        # 组合最终的移动策略：[顺序索引, 插入位置]
+        # Combine final move strategy: [order_index, insertion_position]
+        best_moves = [[int(pred_order_indices[k]), pred_moves_clipped[k]] for k in range(num_b)]
 
-            pos_range_base = len(A)
-            pred_moves_clipped = [int(np.clip(p, 0, pos_range_base + k)) for k, p in enumerate(pred_moves_raw)]
+        # ==================== 策略验证和得分计算 ====================
+        # 提取最终的插入顺序和位置
+        # Extract final insertion order and positions
+        final_order = [move[0] for move in best_moves]      # 插入顺序
+        final_moves = [move[1] for move in best_moves]      # 插入位置
 
-            best_moves = [[int(pred_order_indices[k]), pred_moves_clipped[k]] for k in range(num_b)]
+        # 计算预测策略的得分
+        # Calculate score for predicted strategy
+        pred_score = calculate_score(A, B, final_order, final_moves)
 
-            # final_order = [move[0] for move in best_moves]
-            # final_moves = [move[1] for move in best_moves]
+        # 可选：打印调试信息
+        # Optional: print debug information
+        # print(f"Transformer 预测 (6x3): A={A}, B={B} -> 策略={best_moves}, 预测得分={pred_score}")
 
-            # pred_score = calculate_score(A, B, final_order, final_moves)
-
-            # 保存结果
-            moves_batch[original_idx] = best_moves
-            # scores_batch[original_idx] = pred_score
-
-        return moves_batch
-
+        # 返回最佳策略和预测得分
+        # Return best strategy and predicted score
+        result = (best_moves, pred_score)
+        return result
+        
     except Exception as e:
-        print(f"批量使用 Transformer 预测时出错: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print("返回默认策略")
-
-        # 对于错误情况，为每个样本返回默认策略
-        moves_batch = []
-        scores_batch = []
-        for i in range(batch_size):
-            A = A_batch[i]
-            B = B_batch[i]
-            default_strategy = [[j, 1] for j in range(len(B))]
-            default_score = calculate_score_by_strategy(A, B, default_strategy)
-            moves_batch.append(default_strategy)
-            scores_batch.append(default_score)
-
-        return moves_batch, scores_batch
-_json_cache = {}
+        # ==================== 异常处理(略) ====================
+       
+        # 构建默认策略：按顺序插入，每个都插入到位置1
+        # Build default strategy: insert in order, each at position 1
+        default_strategy = [[i, 1] for i in range(len(B))]
+       
+        # 计算默认策略的得分
+       
+        # Calculate score for default strategy
+        default_score = calculate_score_by_strategy(A, B, default_strategy)
+        return default_strategy, default_score
 
 
 
@@ -2113,7 +2146,7 @@ def train_model(train_data, epochs=300, batch_size=64, model_path="transformer.p
     return model
 
 
-以下是实际调用的参数
+以下是实际调用的参数(patience=2看似激进,但是它经过测试是合适的值)
 
 
     train_model(train_data, epochs=100, batch_size=2048, model_path="transformer_move_predictor.pth",
@@ -2437,6 +2470,8 @@ data_transformer_fill.json
         问题普遍存在: 从低分段到高分段，低估问题无处不在，说明这不是个例，而是模型固有的系统性偏差。
 
 右图小结： 偏差分析图提供了强有力的证据，证明了算法2的精准性。它揭示出算法1的误差不仅大，而且是系统性的低估，这使其在实际应用中几乎不可靠。
+*注 :与真实值的偏差都是负的是因为我在训练时做了额外的处理 因为预测的值比真实值这个理论最佳得分还要好,是没有意义的
+
 
 
 总览与核心结论
@@ -2513,7 +2548,7 @@ transformer+GA 与真实值的均方误差: 2.1468
 
 
 
-结果比较,我们的transformer+GA 模型比单纯的transformer模型还要好!  猜想是成立的  GA在5000次运行中辅助了transformer137次(assist_count=137) 虽然"辅助"的次数占比较低(137/5000≈0.27)，但是对精度带来了显著影响,并且只多了10%的时间
+结果比较,我们的transformer+GA 模型比单纯的transformer模型还要好!  猜想是成立的  GA在5000次运行中辅助了transformer137次(assist_count=137) 虽然"辅助"的次数占比很低(137/5000≈0.27)，但是对精度带来了显著影响,并且只多了10%的时间
 
 
 但是还没完 我们要回到"跳过"方法来处理数据集 
@@ -2594,6 +2629,328 @@ transformer+GA 与真实值的均方误差: 2.1468
   Cohen's d      : -0.279
   影响程度      : 较小
 
-回顾之前的训练结果 真实值的分数分布(平均得分,中位数得分,得分标准差,最高,最低得分等等)算是很接近的 所以我们可以将两次测试进行比较  显著的是 , 虽然算法1(遗传算法)各项数据受影响不大  但是算法2(transformer)的MSE明显提高了,与真实值的偏差毛线变大,效应量分析也从极小变成了较小
+回顾之前的训练结果 真实值的分数分布(平均得分,中位数得分,得分标准差,最高,最低得分等等)算是很接近的 所以我们可以将两次测试进行比较  显著的是 , 虽然算法1(遗传算法)各项数据受影响不大  但是算法2(transformer)的MSE明显提高了,与真实值的偏差明显变大,效应量分析也从极小变成了较小
 
 我觉得这和遗传算法是基于启发的 所以怎么得出计算分数的方法是我们规定的  至于训练transformer时填充了0  可能让transformer学习到了这种"再怎么出牌都无法得分"的特殊情况  而如果直接跳过,则遇到了 “分布外样本” (Out-of-Distribution, OOD) Samples   这时候我们的模型并不知道怎么处理它,导致了相对于填充较差的性能 
+
+
+
+
+现在我们来比较基于以上讨论 试着用得到的新得到的transformer+GA 模型在运行速度上去挑战原始的穷举递归算法(准确度我们之前已经分析了 因为暴力递归得到的就是真实值) 
+
+这里有很重要的一个注意点  transformer的预测是基于GPU的,是可以使用批处理优化的,这一点大大提升了模型的预测速度
+
+对于这个Transformer+GA的集成模型 (Ensemble Model) 
+
+遗传算法 (GA)：其预测逻辑是贪婪且串行的，不适合进行批处理预测。
+
+Transformer 模型：其模型架构和计算方式是并行的，非常适合进行批处理预测(这也是神经网络的优点之一)。
+
+
+所以我这里将Transformer的预测改为批处理  将遗传算法的预测"插入"到其中的代码里 
+
+#批处理集成模型预测函数
+
+def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model, num_a=6, num_b=3, device='cuda'):
+    """
+    批量使用训练好的 Transformer 模型进行预测 (针对 A=6, B=3)。
+
+    参数:
+        A_batch: 列表的列表，每个内部列表是一个A序列，长度为num_a
+        B_batch: 列表的列表，每个内部列表是一个B序列，长度为num_b
+        model: TransformerMovePredictor模型实例
+        num_a: A序列的长度，默认为6
+        num_b: B序列的长度，默认为3
+        device: 计算设备，默认为'cuda'
+
+    返回:
+        两个列表: (moves_batch, scores_batch)
+    """
+    try:
+        batch_size = len(A_batch)
+        moves_batch = []
+        scores_batch = []
+
+        # 检查模型类型
+        if not isinstance(TR_model, TransformerMovePredictor):
+            raise ValueError(f"需要 TransformerMovePredictor 实例, 但得到 {type(TR_model)}")
+
+        TR_model.eval()
+
+        # 分类样本：快速路径和需要模型推理的
+        fast_path_indices = []
+        model_inference_indices = []
+
+        for i in range(batch_size):
+            A = A_batch[i]
+            B = B_batch[i]
+
+            # 检查长度
+            if len(A) != num_a or len(B) != num_b:
+                raise ValueError(
+                    f"样本 {i}: DNNpredict 期望输入 A 长度为 {num_a}, B 长度为 {num_b}, 但收到 A:{len(A)}, B:{len(B)}")
+
+            # 快速路径检查
+            if not set(A) & set(B) and len(B) == len(set(B)):
+                fast_path_indices.append(i)
+            else:
+                model_inference_indices.append(i)
+
+        # 初始化结果列表，使其长度与batch_size相同
+        moves_batch = [None] * batch_size
+        scores_batch = [None] * batch_size
+
+        # 处理快速路径样本
+        for idx in fast_path_indices:
+            moves_batch[idx] = [[0, 0], [1, 0], [2, 0]]
+            scores_batch[idx] = 0
+
+        # 如果没有需要模型推理的样本，直接返回
+        if not model_inference_indices:
+            return moves_batch, scores_batch
+
+        # 准备模型推理的批量数据
+        all_features = []
+
+        for idx in model_inference_indices:
+            A = A_batch[idx]
+            B = B_batch[idx]
+
+            # 1. 计算序列和
+            A_sum = sum(A)
+
+            # 2. 计算B序列中重复的元素数
+            B_counter = {}
+            for val in B:
+                B_counter[val] = B_counter.get(val, 0) + 1
+            B_duplicates = sum(count - 1 for count in B_counter.values())
+
+            # 3. 交集特征
+            intersection = set(A) & set(B)
+            intersection_size = len(intersection)
+
+            # 4. 位置特征
+            positions_in_A = {}
+            for i, a_val in enumerate(A):
+                positions_in_A[a_val] = i
+
+            # 创建增强的输入序列
+            enhanced_sequence = []
+
+            # 处理A序列
+            for i, val in enumerate(A):
+                is_in_intersection = 1.0 if val in intersection else 0.0
+                relative_position = i / num_a
+                relative_size = val / A_sum if A_sum != 0 else 0
+                intersection_ratio = intersection_size / num_b
+
+                enhanced_sequence.append([
+                    val,  # 原始值
+                    val / A_sum if A_sum != 0 else 0,  # 值占A总和的比例
+                    is_in_intersection,  # 是否在交集中
+                    relative_position,  # 相对位置
+                    relative_size,  # 相对大小（占总和的比例）
+                    intersection_ratio  # 交集大小比例
+                ])
+
+            # 处理B序列
+            for i, val in enumerate(B):
+                is_in_A = 1.0 if val in A else 0.0
+                position_in_A = positions_in_A.get(val, -1)
+                relative_position_in_A = position_in_A / num_a if position_in_A >= 0 else -0.1
+
+                # 计算未来得分特征
+                remaining_B = B[i + 1:] if i < len(B) - 1 else []
+                future_score = calculate_future_score(A, remaining_B)
+                future_score_ratio = future_score / (sum(A) + sum(B)) if (sum(A) + sum(B)) > 0 else 0
+
+                enhanced_sequence.append([
+                    val,  # 原始值
+                    future_score_ratio,  # 未来得分比例
+                    is_in_A,  # 是否在A中
+                    relative_position_in_A,  # 在A中的相对位置（如果存在）
+                    B_duplicates / num_b,  # B中重复元素的比例
+                    intersection_ratio  # 交集大小比例
+                ])
+
+            all_features.append(enhanced_sequence)
+
+        # 转换为批量张量并送入GPU
+        input_tensor = torch.FloatTensor(np.array(all_features, dtype=np.float32)).to(device)
+
+        # 批量推理
+        with torch.no_grad():
+            order_logits, pos_preds = TR_model(input_tensor)
+
+        # 处理每个样本的结果
+        for batch_idx, original_idx in enumerate(model_inference_indices):
+            A = A_batch[original_idx]
+            B = B_batch[original_idx]
+
+            # 获取该样本的预测结果
+            sample_order_logits = order_logits[batch_idx].unsqueeze(0)
+            sample_pos_preds = pos_preds[batch_idx].unsqueeze(0)
+
+            # 使用与原始函数相同的后处理逻辑
+            pred_order_indices = sample_order(sample_order_logits).squeeze(0).cpu().numpy()
+            pred_moves_raw = sample_pos_preds.squeeze(0).cpu().numpy()
+
+            pos_range_base = len(A)
+            pred_moves_clipped = [int(np.clip(p, 0, pos_range_base + k)) for k, p in enumerate(pred_moves_raw)]
+
+            moves_TR = [[int(pred_order_indices[k]), pred_moves_clipped[k]] for k in range(num_b)]
+            #加入GA
+            True_score_TR=strategy_TrueScore(A,B,moves_TR)
+
+            move_GA=GA_Strategy(genomeforassist,A, B)
+
+            True_score_GA=strategy_TrueScore(A,B,move_GA)
+
+
+            # pred_score = calculate_score(A, B, final_order, final_moves)
+
+            # 比较并保存结果
+            if True_score_GA<True_score_TR:
+
+                moves_batch[original_idx] = moves_TR
+            # scores_batch[original_idx] = pred_score
+            else:
+                moves_batch[original_idx] = move_GA
+
+        return moves_batch
+
+    except Exception as e:
+        print(f"批量使用 Transformer 预测时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("返回默认策略")
+
+        # 对于错误情况，为每个样本返回默认策略
+        moves_batch = []
+        scores_batch = []
+        for i in range(batch_size):
+            A = A_batch[i]
+            B = B_batch[i]
+            default_strategy = [[j, 1] for j in range(len(B))]
+            default_score = calculate_score_by_strategy(A, B, default_strategy)
+            moves_batch.append(default_strategy)
+            scores_batch.append(default_score)
+
+        return moves_batch, scores_batch
+
+
+
+
+
+
+
+def speed_test():
+    total_time_transformer = 0
+    total_time_recursive = 0
+    num_iterations = 10000  # 迭代次数
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Starting comparison for {num_iterations} iterations...")
+    num_a_test = 6  # <--- 修改
+    num_b_test = 3
+    # 确保这些参数与训练时一致
+    d_model = 256
+    nhead = 4
+    num_encoder_layers = 3
+    dim_feedforward = 512
+    dropout = 0.1
+
+    model1 = TransformerMovePredictor(
+        num_a=num_a_test, num_b=num_b_test, d_model=d_model,
+        nhead=nhead, num_encoder_layers=num_encoder_layers,
+        dim_feedforward=dim_feedforward
+    ).to(device)
+
+    A_batch = []
+    B_batch = []
+
+    model_path_1 = "./trained/transformer_move_predictor_6x3_skip.pth"
+
+    genomeforassist = load_best_genome("./trained/best_genome_skip.pkl")
+
+    model1.load_state_dict(torch.load(model_path_1, map_location=device))
+    for i in range(num_iterations):
+        A, B = deal_cards_tool()
+        A_batch.append(A)
+        B_batch.append(B)
+
+        A_copy = list(A)
+        B_copy = list(B)
+        start_time_r = time.perf_counter()
+        move_r = recursive_Strategy(A_copy, B_copy)
+        end_time_r = time.perf_counter()
+        total_time_recursive += (end_time_r - start_time_r)
+
+    start_time_t = time.perf_counter()
+    move_t = Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, model1, num_a=num_a_test, num_b=num_b_test)
+
+
+    # 模拟将得到的列表中的元素取出操作
+    for item in move_t:
+        print(" ")
+
+    ##这里还有几步  包括提取move_batch中的元素,合并GA的结果等等
+    end_time_t = time.perf_counter()
+    total_time_transformer += (end_time_t - start_time_t)
+
+    #
+    # # 打开文件并逐行写入
+    # with open("output.txt", "w", encoding="utf-8") as file:
+    #     for row in move_t:
+    #         file.write(" ".join(map(str, row)) + "\n")  # 每行用空格分隔
+
+    # --- 报告结果 ---
+    print("\n--- Comparison Complete ---")
+    print(f"Total time for Transformer:      {total_time_transformer:.6f} seconds")
+
+    print(f"Total time for recursive_Strategy: {total_time_recursive:.6f} seconds")
+
+    if num_iterations > 0:
+        avg_time_transformer = total_time_transformer / num_iterations
+        print(f"\nAverage time per call (Transformer):      {avg_time_transformer:.8f} seconds")
+
+        avg_time_recursive = total_time_recursive / num_iterations
+        print(f"Average time per call (recursive_Strategy): {avg_time_recursive:.8f} seconds")
+
+在10k次迭代后  这是我的结果:
+
+--- Comparison Complete ---
+Total time for Transformer:      22.218777 seconds
+Total time for recursive_Strategy: 24.969214 seconds
+
+Average time per call (Transformer):      0.00222188 seconds
+Average time per call (recursive_Strategy): 0.00249692 seconds
+
+
+在A的长度为6,B的长度为3的情况下,这时候的递归算法在数据规模这样小的情况其实不慢,但是我们比它还要快!
+
+*注 虽然之前的比较中 不使用批处理的Transformer预测与GA比较时,速度大概是GA的1/20   但是如果使用了批处理 情况就完全不同了 
+以下是Transformer批处理预测与递归算法的速度(同样10k次迭代):
+
+--- Comparison Complete ---
+Total time for Transformer:      10.028685 seconds
+Total time for recursive_Strategy: 25.534803 seconds
+
+Average time per call (Transformer):      0.00100287 seconds
+Average time per call (recursive_Strategy): 0.00255348 seconds
+
+
+GA算法集成之后,消耗的时间是原来的2倍,也就是说 在数据规模到了一定程度后 批处理带来的提升是非常明显的 
+
+
+
+
+
+
+
+# 3. 游戏架构
+
+
+
+
+

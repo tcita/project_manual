@@ -2656,12 +2656,12 @@ def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model
         device: 计算设备，默认为'cuda'
 
     返回:
-        两个列表: (moves_batch, scores_batch)
+        列表: moves_batch
     """
     try:
         batch_size = len(A_batch)
-        moves_batch = []
-        scores_batch = []
+   
+
 
         # 检查模型类型
         if not isinstance(TR_model, TransformerMovePredictor):
@@ -2689,16 +2689,16 @@ def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model
 
         # 初始化结果列表，使其长度与batch_size相同
         moves_batch = [None] * batch_size
-        scores_batch = [None] * batch_size
+      
 
         # 处理快速路径样本
         for idx in fast_path_indices:
             moves_batch[idx] = [[0, 0], [1, 0], [2, 0]]
-            scores_batch[idx] = 0
+        
 
         # 如果没有需要模型推理的样本，直接返回
         if not model_inference_indices:
-            return moves_batch, scores_batch
+            return moves_batch
 
         # 准备模型推理的批量数据
         all_features = []
@@ -2805,7 +2805,7 @@ def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model
             if True_score_GA<True_score_TR:
 
                 moves_batch[original_idx] = moves_TR
-            # scores_batch[original_idx] = pred_score
+          
             else:
                 moves_batch[original_idx] = move_GA
 
@@ -2814,7 +2814,7 @@ def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model
     except Exception as e:
         ...
 
-        return moves_batch, scores_batch
+        return moves_batch
 
 
 
@@ -2837,7 +2837,7 @@ def black_hole(value):
 
 def execution_time():
 
-    total_time_transformer = 0
+    total_time_transformer_P_GA = 0
 
     total_time_recursive = 0
 
@@ -2846,7 +2846,7 @@ def execution_time():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # transformer预测初始化
+    # transformer预测初始化 参数需和训练时一致
 
     num_a_test = 6
 
@@ -2918,9 +2918,18 @@ def execution_time():
 
 
 
-    total_time_transformer += (end_time_t - start_time_t)
-#--------------------------------------------------------------------------------------------
+    total_time_transformer_P_GA += (end_time_t - start_time_t)
+#GA算法运行的时间 -----------------------------------------------------------------------------
+    total_time_GA=0
+    start_time_g = time.perf_counter()
+    for A_copy, B_copy in test_cases:
+        move_GA = GA_Strategy(genomeforassist, A_copy, A_copy)
 
+        # 保证解释器不优化未使用的move_GA
+        black_hole(move_GA)
+    end_time_g = time.perf_counter()
+
+    total_time_GA += (end_time_g - start_time_g)
 
 #递归穷举运行的时间-----------------------------------------------------------------------------
     start_time_r = time.perf_counter()
@@ -2942,29 +2951,23 @@ def execution_time():
 
 
 
-
 在10k次迭代后  这是我的结果(这里的batch_size和训练时一样,是2048):
 
 --- Comparison Complete ---
-Total time for Transformer+GA:      21.126786 seconds
-Total time for recursive_Strategy: 23.321547 seconds
 
+Total time for Transformer+GA:      21.397933 seconds
 
+Total time for GA: 15.721719 seconds
+
+Total time for recursive_Strategy: 23.342025 seconds
 
 
 在A的长度为6,B的长度为3的情况下,这时候的递归算法在数据规模这样小的情况速度是比较快的,但这里的测试中实现的集成模型比它还稍快一点
 
-    *注: 虽然之前的比较中 不使用批处理的Transformer预测与GA比较时,速度大概是GA的1/20   但是如果使用了批处理 情况就完全不同了 
-        
-        以下是Transformer(未集成GA)批处理预测与递归算法的速度(同样10k次迭代):
+虽然之前的比较中 不使用批处理的Transformer预测与GA比较时,速度大概是GA的1/20   但是如果使用了批处理 情况就完全不同了 
+在数据规模到了一定程度后,再使用批处理带来的提升是非常明显的   
 
-        --- Comparison Complete ---
-        Total time for Transformer+GA:      9.339099 seconds
-        Total time for recursive_Strategy: 24.360100 seconds
-
-
-
-        GA算法集成之后,消耗的时间是原来的2倍,也就是说 在数据规模到了一定程度后,再使用批处理带来的提升是非常明显的 
+但是集成模型的涉及到模型结果的选择,这时候需要调用 strategy_TrueScore(A,B,move_GA) 去计算本次策略的真正得分(虽然GA和Transformer也能预测得分但是存在误差,用来精确判断哪个模型更优是不可信的) 频繁调用 strategy_TrueScore   会带来不小的额外的开销
 
 
 

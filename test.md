@@ -290,9 +290,7 @@ def insertion(A, b, pos):
 
     #异常处理 尤其是 IndexError 
     except Exception as e:
-        print(f"当将 {b} 插入到当前A：{A}的位置 {pos} 时发生错误。")
-        print(f"Error message: {str(e)}")
-        raise
+       ...
 
 
 
@@ -1142,7 +1140,7 @@ def evaluate_genome(genome, num_rounds=1000, seed_base=111):
     # 计算最终平均分(平均)
     mean_score = torch.mean(total_scores).item()
 
-    print(f"基因组平均得分: {mean_score}")
+   
 
     return mean_score  # 返回平均得分
 
@@ -1277,7 +1275,7 @@ def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tourname
             improvement = best_fitness_history[-1] - best_fitness_history[-2]
             if improvement > 0:
                 method = method_history[-1]
-                print(f"改进率为 {improvement:.4f}，沿用方法：{method}")
+                
             else:
                 method = method_history[-1]
                 # 找到 现在方法 的索引
@@ -1288,10 +1286,10 @@ def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tourname
 
                 method = evolution_methods[1 - index_of_method_now]
                 #method = np.random.choice(evolution_methods)
-                print(f"改进率为 {improvement:.4f}，切换方法为：{method}")
+              
         else:
             method = evolution_methods[0]
-            print(f"无历史改进数据，使用第一个方法：{method}")
+      
             
         method_history.append(method)
 
@@ -1658,7 +1656,7 @@ def prepare_data_transformer(sample: dict, num_a=6, num_b=3):
     best_moves = sample["best_moves"]
 
     if len(A) != num_a or len(B) != num_b:
-        print(f"Warning: Skipping sample with A={A}, B={B} due to unexpected length (expected A:{num_a}, B:{num_b}).")
+        
         return None, None, None
 
     # 新增特征计算
@@ -1731,8 +1729,7 @@ def prepare_data_transformer(sample: dict, num_a=6, num_b=3):
     pos_target = np.array([move[1] for move in best_moves], dtype=np.float32)
 
     if len(set(order_target)) != num_b:
-        print(f"Warning: Skipping sample with invalid order target in best_moves: {order_target}")
-        return None, None, None
+            return None, None, None
 
 
     result = (input_sequence, order_target, pos_target)
@@ -1760,7 +1757,7 @@ def Transformer_predict(A, B, model, num_a=6, num_b=3):
         # 如果A和B没有交集，且B中没有重复元素，使用默认策略
         # Special case: if A and B have no intersection and B has no duplicates, use default strategy
         if not set(A) & set(B) and len(B) == len(set(B)):
-            print("快速路径：A、B无交集且B无重复，返回默认策略")
+           
             # 返回简单的顺序插入策略：[[索引0,位置0], [索引1,位置0], [索引2,位置0]]
             return [[0, 0], [1, 0], [2, 0]], 0
 
@@ -1889,22 +1886,22 @@ def Transformer_predict(A, B, model, num_a=6, num_b=3):
 
         # ==================== 结果处理 ====================
         # 从顺序逻辑值中采样得到预测的插入顺序
-        # Sample insertion order from order logits
+       
         pred_order_indices = sample_order(order_logits).squeeze(0).cpu().numpy()
         
         # 获取位置预测结果
-        # Get position predictions
+       
         pred_moves_raw = pos_preds.squeeze(0).cpu().numpy()
 
         # 限制位置预测在有效范围内
-        # Clip position predictions to valid range
+  
         pos_range_base = len(A)  # 基础位置范围
         # 对每个位置预测进行裁剪：范围从0到(基础范围+当前步骤)
         # Clip each position prediction: range from 0 to (base_range + current_step)
         pred_moves_clipped = [int(np.clip(p, 0, pos_range_base + k)) for k, p in enumerate(pred_moves_raw)]
 
         # 组合最终的移动策略：[顺序索引, 插入位置]
-        # Combine final move strategy: [order_index, insertion_position]
+        
         best_moves = [[int(pred_order_indices[k]), pred_moves_clipped[k]] for k in range(num_b)]
 
         # ==================== 策略验证和得分计算 ====================
@@ -1913,29 +1910,21 @@ def Transformer_predict(A, B, model, num_a=6, num_b=3):
         final_order = [move[0] for move in best_moves]      # 插入顺序
         final_moves = [move[1] for move in best_moves]      # 插入位置
 
-        # 计算预测策略的得分
-        # Calculate score for predicted strategy
-        pred_score = calculate_score(A, B, final_order, final_moves)
-
-        # 可选：打印调试信息
-        # Optional: print debug information
-        # print(f"Transformer 预测 (6x3): A={A}, B={B} -> 策略={best_moves}, 预测得分={pred_score}")
-
-        # 返回最佳策略和预测得分
-        # Return best strategy and predicted score
+      
         result = (best_moves, pred_score)
         return result
         
     except Exception as e:
         # ==================== 异常处理(略) ====================
-       
+       ...
+
         # 构建默认策略：按顺序插入，每个都插入到位置1
-        # Build default strategy: insert in order, each at position 1
+       
         default_strategy = [[i, 1] for i in range(len(B))]
        
         # 计算默认策略的得分
        
-        # Calculate score for default strategy
+        
         default_score = calculate_score_by_strategy(A, B, default_strategy)
         return default_strategy, default_score
 
@@ -1963,15 +1952,7 @@ def train_model(train_data, epochs=300, batch_size=64, model_path="transformer.p
     """
     
     # ==================== GPU硬件信息检查 ====================
-    if torch.cuda.is_available():
-        # 打印GPU设备名称
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
-        # 打印GPU总内存（转换为GB单位）
-        print(f"GPU Total Memory: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.2f} GB")
-        # 打印CUDA版本信息
-        print(f"CUDA Version: {torch.version.cuda}")
-    else:
-        print("Warning: No available GPU detected!")
+    ...
 
     # 全局停止训练标志
     global stop_training
@@ -2095,8 +2076,7 @@ def train_model(train_data, epochs=300, batch_size=64, model_path="transformer.p
 
                 # ==================== 训练进度日志 ====================
                 # 每10个批次打印一次训练状态
-                if batch_count % 10 == 0:
-                    print(f"    Batch {batch_count}/{len(train_data)//batch_size}, Loss: {loss.item():.4f}, LR: {new_lr:.7f}")
+               ...
 
             # ==================== 轮次结束后的学习率更新 ====================
             # 如果已过预热阶段，执行余弦退火调度
@@ -2106,7 +2086,7 @@ def train_model(train_data, epochs=300, batch_size=64, model_path="transformer.p
             # ==================== 轮次统计和日志 ====================
             # 计算当前轮次的平均损失
             avg_loss = total_loss / batch_count if batch_count > 0 else total_loss
-            print(f"Epoch {epoch + 1}/{epochs}, Average Loss: {avg_loss:.4f}, LR: {new_lr:.7f}")
+       
 
             # ==================== 早停检查机制 ====================
             # 检查是否有显著改善（损失下降超过最小阈值）
@@ -2116,15 +2096,14 @@ def train_model(train_data, epochs=300, batch_size=64, model_path="transformer.p
                 patience_counter = 0  # 重置耐心计数器
                 # 深拷贝保存当前最佳模型状态
                 best_model_state = model.state_dict().copy()
-                print(f"Found new best model with loss: {best_loss:.4f}")
+         
             else:
                 # 没有显著改善
                 patience_counter += 1
-                print(f"No significant improvement, patience counter: {patience_counter}/{patience}")
-
+              
                 # 检查是否触发早停条件
                 if patience_counter >= patience:
-                    print(f"Early stopping triggered! No significant improvement for {patience} consecutive epochs")
+                  
                     # 恢复到训练过程中的最佳模型状态
                     if best_model_state is not None:
                         model.load_state_dict(best_model_state)
@@ -2133,13 +2112,11 @@ def train_model(train_data, epochs=300, batch_size=64, model_path="transformer.p
     # ==================== 异常处理 ====================
     except KeyboardInterrupt:
         # 捕获键盘中断（Ctrl+C）
-        print("\nTraining manually interrupted, saving current model...")
+        ...
 
     except Exception as e:
         # 捕获其他所有异常
-        print(f"\nError occurred during training: {str(e)}")
-        import traceback
-        traceback.print_exc()  # 打印详细的错误堆栈
+        ...
 
     finally:
         # ==================== 模型保存 ====================
@@ -2148,15 +2125,14 @@ def train_model(train_data, epochs=300, batch_size=64, model_path="transformer.p
             # 如果触发了早停并且有最佳模型状态，使用最佳模型
             if patience_counter >= patience and best_model_state is not None:
                 model.load_state_dict(best_model_state)
-                print("Best model state from training process loaded")
+             
 
             # 保存模型状态字典到指定路径
             torch.save(model.state_dict(), model_path)
-            print(f"Transformer model saved to {model_path}")
+         
             
         except Exception as save_error:
-            # 捕获保存过程中的错误
-            print(f"Error occurred while saving model: {str(save_error)}")
+           ...
 
     # 返回训练完成的模型
     return model
@@ -2243,7 +2219,7 @@ transformer生成的pth格式模型有很强的黑箱性质 所以这里我们�
 
 2. 偏差条形图 (Bias Bar Chart)
 
-    目的: 这是个更高级的分析图，它旨在探究 模型的偏差是否与问题难度（即真实值的高低）有关。
+    目的: 模型的偏差是否与问题难度（即真实值的高低）有关。
   
 
 
@@ -2263,7 +2239,7 @@ def generate_training_data(num_samples=10000):
         A, B = deal_cards_tool()    
 
         max_score, best_moves = recursive_StrategyAndScore(A, B)
-        print(f"{i} of {num_samples}")
+
 
 #保证best_move这个二维数组的3个子数组的中第一个元素是互异的 (因为只能操作3次,每次只能是0 1 2其中之一,且每次操作的序号是唯一的)
         whole = [0, 1, 2]
@@ -2400,7 +2376,6 @@ data_transformer_fill.json
 详细对比分析
 1. 预测准确性 (Accuracy)
 
-这是两个算法最核心的差异所在。
 
     均方误差 (MSE):
 
@@ -2486,7 +2461,7 @@ data_transformer_fill.json
         问题普遍存在: 从低分段到高分段，低估问题无处不在，说明这不是个例，而是模型固有的系统性偏差。
 
 右图小结： 偏差分析图提供了强有力的证据，证明了算法2的精准性。它揭示出算法1的误差不仅大，而且是系统性的低估，这使其在实际应用中几乎不可靠。
-*注 :与真实值的偏差都是负的是因为我在训练时做了额外的处理 因为预测的值比真实值这个理论最佳得分还要好,是没有意义的
+*注 :与真实值的偏差都是负的是因为我在训练时做了额外的启发式修正, 因为预测的值比真实值这个理论最佳得分还要好,是没有实际意义的
 
 
 
@@ -2510,8 +2485,6 @@ data_transformer_fill.json
     score2=strategy_TrueScore(A,B,move2)
     if score1<score2:
 
-        assist_count+=1
-        print(f"assist  win {assist_count} {A},{B}")
         return move2
 
 同样的我们来看现在的transformer+GA 模型的评测结果
@@ -2645,6 +2618,7 @@ transformer+GA 与真实值的均方误差: 2.1468
   Cohen's d      : -0.279
   影响程度      : 较小
 
+
 回顾之前的训练结果 真实值的分数分布(平均得分,中位数得分,得分标准差,最高,最低得分等等)算是很接近的 所以我们可以将两次测试进行比较  显著的是 , 虽然算法1(遗传算法)各项数据受影响不大  但是算法2(transformer)的MSE明显提高了,与真实值的偏差明显变大,效应量分析也从极小变成了较小
 
 我觉得这和遗传算法是基于启发的 所以怎么得出计算分数的方法是我们规定的  至于训练transformer时填充了0  可能让transformer学习到了这种"再怎么出牌都无法得分"的特殊情况  而如果直接跳过,则遇到了 “分布外样本” (Out-of-Distribution, OOD) Samples   这时候我们的模型并不知道怎么处理它,导致了相对于填充较差的性能 
@@ -2664,6 +2638,8 @@ Transformer 模型：其模型架构和计算方式是并行的，非常适合�
 
 
 所以我这里将Transformer的预测改为批处理  将遗传算法的预测"插入"到其中的代码里 
+
+
 
 #批处理集成模型预测函数
 
@@ -2703,8 +2679,7 @@ def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model
 
             # 检查长度
             if len(A) != num_a or len(B) != num_b:
-                raise ValueError(
-                    f"样本 {i}: DNNpredict 期望输入 A 长度为 {num_a}, B 长度为 {num_b}, 但收到 A:{len(A)}, B:{len(B)}")
+                raise ValueError("...")
 
             # 快速路径检查
             if not set(A) & set(B) and len(B) == len(set(B)):
@@ -2815,7 +2790,8 @@ def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model
             pred_moves_clipped = [int(np.clip(p, 0, pos_range_base + k)) for k, p in enumerate(pred_moves_raw)]
 
             moves_TR = [[int(pred_order_indices[k]), pred_moves_clipped[k]] for k in range(num_b)]
-            #加入GA
+            
+            #使用GA模型的预测进行辅助 实现集成模型
             True_score_TR=strategy_TrueScore(A,B,moves_TR)
 
             move_GA=GA_Strategy(genomeforassist,A, B)
@@ -2836,21 +2812,7 @@ def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model
         return moves_batch
 
     except Exception as e:
-        print(f"批量使用 Transformer 预测时出错: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print("返回默认策略")
-
-        # 对于错误情况，为每个样本返回默认策略
-        moves_batch = []
-        scores_batch = []
-        for i in range(batch_size):
-            A = A_batch[i]
-            B = B_batch[i]
-            default_strategy = [[j, 1] for j in range(len(B))]
-            default_score = calculate_score_by_strategy(A, B, default_strategy)
-            moves_batch.append(default_strategy)
-            scores_batch.append(default_score)
+        ...
 
         return moves_batch, scores_batch
 
@@ -2859,104 +2821,150 @@ def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model
 
 
 
+def black_hole(value):
 
-def excution_time_test():
+    """
+
+这里使用了一个小技巧,使用"black_hole"函数修改一个全局变量来保证解释器不会优化未使用的函数。 防止计算运行时间时不准确
+
+
+    """
+
+    global _BLACK_HOLE_SINK
+
+    _BLACK_HOLE_SINK = value
+
+
+def execution_time():
+
     total_time_transformer = 0
+
     total_time_recursive = 0
+
     num_iterations = 10000  # 迭代次数
 
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Starting comparison for {num_iterations} iterations...")
-    num_a_test = 6  # <--- 修改
+
+    # transformer预测初始化
+
+    num_a_test = 6
+
     num_b_test = 3
-    # 确保这些参数与训练时一致
+
+
     d_model = 256
+
     nhead = 4
+
     num_encoder_layers = 3
+
     dim_feedforward = 512
-    dropout = 0.1
+
+
 
     model1 = TransformerMovePredictor(
+
         num_a=num_a_test, num_b=num_b_test, d_model=d_model,
+
         nhead=nhead, num_encoder_layers=num_encoder_layers,
+
         dim_feedforward=dim_feedforward
+
     ).to(device)
 
+
     A_batch = []
+
     B_batch = []
 
-    model_path_1 = "./trained/transformer_move_predictor_6x3_skip.pth"
+    test_cases=[]
 
-    genomeforassist = load_best_genome("./trained/best_genome_skip.pkl")
 
+    # 辅助GA模型载入
+    genomeforassist = load_best_genome("./trained/best_genome.pkl")
+
+    ## Transformer模型载入
+    model_path_1 = "./trained/transformer_move_predictor_6x3.pth"
     model1.load_state_dict(torch.load(model_path_1, map_location=device))
+
+    # A,B数据准备
     for i in range(num_iterations):
+
         A, B = deal_cards_tool()
+
         A_batch.append(A)
+
         B_batch.append(B)
 
-        A_copy = list(A)
-        B_copy = list(B)
-        start_time_r = time.perf_counter()
-        move_r = recursive_Strategy(A_copy, B_copy)
-        end_time_r = time.perf_counter()
-        total_time_recursive += (end_time_r - start_time_r)
+
+        test_cases.append((list(A), list(B)))
+
+
+#计算Transform+GA 预测 运行的时间--------------------------------------------------------------
 
     start_time_t = time.perf_counter()
+
     move_t = Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, model1, num_a=num_a_test, num_b=num_b_test)
 
 
-    # 模拟将得到的列表中的元素取出操作
+    # 因为得到的返回值move是批次的(列表),这里模拟将得到的列表中的元素取出操作消耗的时间
+
     for item in move_t:
-        print(" ")
+        black_hole(item)
 
-    ##这里还有几步  包括提取move_batch中的元素,合并GA的结果等等
+
     end_time_t = time.perf_counter()
+
+
+
     total_time_transformer += (end_time_t - start_time_t)
-
-    #
-    # # 打开文件并逐行写入
-    # with open("output.txt", "w", encoding="utf-8") as file:
-    #     for row in move_t:
-    #         file.write(" ".join(map(str, row)) + "\n")  # 每行用空格分隔
-
-    # --- 报告结果 ---
-    print("\n--- Comparison Complete ---")
-    print(f"Total time for Transformer:      {total_time_transformer:.6f} seconds")
-
-    print(f"Total time for recursive_Strategy: {total_time_recursive:.6f} seconds")
-
-    if num_iterations > 0:
-        avg_time_transformer = total_time_transformer / num_iterations
-        print(f"\nAverage time per call (Transformer):      {avg_time_transformer:.8f} seconds")
-
-        avg_time_recursive = total_time_recursive / num_iterations
-        print(f"Average time per call (recursive_Strategy): {avg_time_recursive:.8f} seconds")
-
-在10k次迭代后  这是我的结果:
-
---- Comparison Complete ---
-Total time for Transformer:      22.218777 seconds
-Total time for recursive_Strategy: 24.969214 seconds
-
-Average time per call (Transformer):      0.00222188 seconds
-Average time per call (recursive_Strategy): 0.00249692 seconds
+#--------------------------------------------------------------------------------------------
 
 
-在A的长度为6,B的长度为3的情况下,这时候的递归算法在数据规模这样小的情况速度是比较快的,但这里实现的模型比它还稍快一点
+#递归穷举运行的时间-----------------------------------------------------------------------------
+    start_time_r = time.perf_counter()
 
-*注 虽然之前的比较中 不使用批处理的Transformer预测与GA比较时,速度大概是GA的1/20   但是如果使用了批处理 情况就完全不同了 
-以下是Transformer批处理预测与递归算法的速度(同样10k次迭代):
+    for A_copy, B_copy in test_cases:
+        move_r = recursive_Strategy(A_copy, B_copy)
+
+#保证解释器不优化未使用的move_r
+        black_hole(move_r)
+
+    end_time_r = time.perf_counter()
+
+    total_time_recursive += (end_time_r - start_time_r)
+#--------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+在10k次迭代后  这是我的结果(这里的batch_size和训练时一样,是2048):
 
 --- Comparison Complete ---
-Total time for Transformer:      10.028685 seconds
-Total time for recursive_Strategy: 25.534803 seconds
-
-Average time per call (Transformer):      0.00100287 seconds
-Average time per call (recursive_Strategy): 0.00255348 seconds
+Total time for Transformer+GA:      21.126786 seconds
+Total time for recursive_Strategy: 23.321547 seconds
 
 
-GA算法集成之后,消耗的时间是原来的2倍,也就是说 在数据规模到了一定程度后 批处理带来的提升是非常明显的 
+
+
+在A的长度为6,B的长度为3的情况下,这时候的递归算法在数据规模这样小的情况速度是比较快的,但这里的测试中实现的集成模型比它还稍快一点
+
+    *注: 虽然之前的比较中 不使用批处理的Transformer预测与GA比较时,速度大概是GA的1/20   但是如果使用了批处理 情况就完全不同了 
+        
+        以下是Transformer(未集成GA)批处理预测与递归算法的速度(同样10k次迭代):
+
+        --- Comparison Complete ---
+        Total time for Transformer+GA:      9.339099 seconds
+        Total time for recursive_Strategy: 24.360100 seconds
+
+
+
+        GA算法集成之后,消耗的时间是原来的2倍,也就是说 在数据规模到了一定程度后,再使用批处理带来的提升是非常明显的 
 
 
 

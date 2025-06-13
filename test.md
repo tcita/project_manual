@@ -1881,7 +1881,8 @@ def Transformer_predict(A, B, model, num_a=6, num_b=3):
 
         # ==================== 结果处理 ====================
         # 从顺序逻辑值中采样得到预测的插入顺序
-       
+
+        #sample_order为softmax采样
         pred_order_indices = sample_order(order_logits).squeeze(0).cpu().numpy()
         
         # 获取位置预测结果
@@ -1918,10 +1919,9 @@ def Transformer_predict(A, B, model, num_a=6, num_b=3):
         default_strategy = [[i, 1] for i in range(len(B))]
        
         # 计算默认策略的得分
-       
-        
-        default_score = calculate_score_by_strategy(A, B, default_strategy)
-        return default_strategy, default_score
+               
+      
+        return default_strategy
 
 
 
@@ -2203,7 +2203,7 @@ transformer生成的pth格式模型有很强的黑箱性质 所以这里我们�
             p-value 是核心指标。如果 p < 0.05，则认为模型得分与真实值之间的差异是显著的，而不是由随机因素造成的。
         效应量分析 (Cohen's d):
             t-检验只告诉我们差异是否“显著”，但没有说明这个差异有多“大”。
-            Cohen's d 用来衡量差异的 实际大小或影响程度（极小、较小、中等、较大）。这使得评估更具实践意义。
+            Cohen's d 用来衡量差异的 实际大小或影响程度（极小、较小、中等、较大）。
 
 可视化分析
 
@@ -2214,7 +2214,7 @@ transformer生成的pth格式模型有很强的黑箱性质 所以这里我们�
 
 2. 偏差条形图 (Bias Bar Chart)
 
-    目的: 模型的偏差是否与问题难度（即真实值的高低）有关。
+    目的: 直观的观察模型在不同得分分数段的偏差规律
   
 
 
@@ -2455,7 +2455,8 @@ data_transformer_fill.json
 
         问题普遍存在: 从低分段到高分段，低估问题无处不在，说明这不是个例，而是模型固有的系统性偏差。
 
-右图小结： 偏差分析图提供了强有力的证据，证明了算法2的精准性。它揭示出算法1的误差不仅大，而且是系统性的低估，这使其在实际应用中几乎不可靠。
+右图小结： 偏差分析图提供了强有力的证据，证明了算法2的精准性。它揭示出算法1的误差存在系统性的普遍低估
+
 *注 :与真实值的偏差都是负的是因为我在训练时做了额外的启发式修正, 因为预测的值比真实值这个理论最佳得分还要好,是没有实际意义的
 
 
@@ -2536,6 +2537,7 @@ transformer+GA 与真实值的均方误差: 2.1468
 
 
 但是还没完 我们要回到"跳过"方法来处理数据集 
+
 
 由于和处理"填充"后的数据集方式相似度很高, 这里只做步骤概述
 ##  使用"跳过":
@@ -2876,12 +2878,10 @@ def execution_time():
     test_cases=[]
 
 
-    # 辅助GA模型载入
-    genomeforassist = load_best_genome("./trained/best_genome.pkl")
+    # 辅助GA模型和Transformer模型载入
+    genomeforassist = load_best_genome(path_GA)
 
-    ## Transformer模型载入
-    model_path_1 = "./trained/transformer_move_predictor_6x3.pth"
-    model1.load_state_dict(torch.load(model_path_1, map_location=device))
+    model1.load_state_dict(torch.load(path_tranformer, map_location=device))
 
     # A,B数据准备
     for i in range(num_iterations):
@@ -2972,11 +2972,100 @@ Total time for recursive_Strategy: 23.342025 seconds
 
 ## 第三部分  服务器搭建与游戏架构
 
-现在我们需要将之前讨论好的Transformer+GA的集成模型(以下统称"集成模型")打包成一个本地的服务器 它会与unity游戏(客户端)进行数据交互,客户端传入A,B  服务器会根据传入的A,B进行预测,返回策略(best_move),然后返回预测结果给客户端
+现在我们需要将之前讨论好的Transformer+GA的集成模型(以下统称"集成模型")打包成一个本地的服务器 它会与unity游戏(客户端)进行数据交互,客户端传入A,B  服务器会根据传入的A,B进行预测,返回策略(best_move),然后返回预测结果给客户端进行自动操作
+
+
+这里使用的web框架是flask
 
 
 
 
+#加载训练好的Transformer模型和GA模型并实例化
+
+def load_models():
+...
+
+
+#使用装饰器将路由规则注册到Flask应用
+@app.route('/predict', methods=['POST'])
+
+def predict():
+    """
+    功能描述：
+    - 接收客户端发送的 A 和 B 牌组数据
+    - 使用训练好的模型进行预测
+    - 返回预测的出牌策略 (move)
+    
+    HTTP方法：POST
+    请求格式：JSON
+    
+    请求体结构：
+    {
+        "A": [牌组A的牌面点数列表],
+        "B": [牌组B的牌面点数列表]
+    }
+    
+    返回结果：
+    成功时：{"success": True, "predicted_move": 预测结果}
+    失败时：{"error": "错误信息"}
+
+    省略了日志相关的代码
+    """
+ 
+    if not request.is_json:
+        return jsonify({"error": "请求必须是 JSON 格式"}), 400
+
+    data = request.get_json()
+    A = data.get('A')
+    B = data.get('B')
+
+    # --- 输入验证 ---
+    if not A or not B:
+        return jsonify({"error": "请求体中必须包含 'A' 和 'B' 字段"}), 400
+
+    if not isinstance(A, list) or not isinstance(B, list):
+        return jsonify({"error": "'A' 和 'B' 必须是列表"}), 400
+
+    if len(A) != NUM_A or len(B) != NUM_B:
+        return jsonify({
+            "error": f"输入牌的数量不正确。期望 A 有 {NUM_A} 张, B 有 {NUM_B} 张。",
+            "received": f"A: {len(A)}, B: {len(B)}"
+        }), 400
+
+    try:
+        # 将单个输入包装成批次 (batch)
+        A_batch = [A]
+        B_batch = [B]
+
+        # --- 调用核心预测函数 ---
+       
+       
+        moves_batch = Transformer_predict_batch_plus_GA(
+            A_batch=A_batch,
+            B_batch=B_batch,
+            genomeforassist=GENOME_FOR_ASSIST,
+            TR_model=TR_MODEL,
+            num_a=NUM_A,
+            num_b=NUM_B,
+            device=device
+        )
+
+        # 从批次结果中提取预测结果
+        predicted_move = moves_batch[0]
+
+        # 返回预测结果
+        return jsonify({
+            "success": True,
+            "predicted_move": predicted_move
+        })
+
+    except Exception as e:
+        ...
+
+经测试服务器能返回预期的值
+
+
+为了方便调试,没有对服务器进行打包 ,而使用一个bat脚本启动服务器
 
 
 

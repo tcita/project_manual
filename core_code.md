@@ -442,26 +442,41 @@ def compute_card_values_batch(A_copy, B, genome_tensor):
             # all_new_As.append(new_A)
 
         # 将所有特征转换为张量并一次性在GPU上计算
+
         if all_features:
-            features_tensor = torch.tensor(all_features, dtype=torch.float32, device=device)
+                features_tensor = torch.tensor(all_features, dtype=torch.float32, device=device)
+
+                # --- 關鍵步驟：在此處添加批次標準化 ---
+                # 1. 計算當前批次特徵的均值和標準差
+                #    keepdim=True 保持維度以便廣播
+                mean = torch.mean(features_tensor, dim=0, keepdim=True)
+                std = torch.std(features_tensor, dim=0, keepdim=True)
+
+                # 2. 為防止除以零，給標準差加上一個極小值 (epsilon)
+                epsilon = 1e-8
+
+                # 3. 進行標準化 (Z-score)
+                standardized_features = (features_tensor - mean) / (std + epsilon)
+                # ----------------------------------------
+
+                # 使用標準化後的特徵進行加權求值
+                # 特征张量和目前的基因张量计算点积。对于每一个可能的插入位置，
+                # 其对应的特征向量会与genome_tensor 进行点积运算 也就是给每个特征加权：
+                # 评估值 = (feature1 * genome_tensor的第一个元素) + (feature2 * genome_tensor的第二个元素) + ... + #   (feature6 * genome_tensor的第六个元素)
+
+                values = torch.matmul(standardized_features, genome_tensor)
+
+                 # 用于返回输入张量中最大元素的索引
+                best_idx = torch.argmax(values).item()
+                best_value = values[best_idx].item()
+                #最大评估值的对应插入位置(最优插入)
+                best_pos = all_positions[best_idx]
+
+                card_values.append((i, best_value, best_pos))
+
+        return card_values
 
 
-            # 特征张量和目前的基因张量计算点积。对于每一个可能的插入位置，
-            # 其对应的特征向量会与genome_tensor 进行点积运算 也就是给每个特征加权：
-            # 评估值 = (feature1 * genome_tensor的第一个元素) + (feature2 * genome_tensor的第二个元素) + ... + (feature6 * genome_tensor的第六个元素)
-            values = torch.matmul(features_tensor, genome_tensor)
-
-            # 用于返回输入张量中最大元素的索引
-            best_idx = torch.argmax(values).item()
-            #该索引对应的值(最大的评估值)
-            best_value = values[best_idx].item()
-            #最大评估值的对应插入位置(最优插入)
-            best_pos = all_positions[best_idx]
-
-
-            card_values.append((i, best_value, best_pos))
-
-    return card_values
 
 # 计算卡值
 card_values = compute_card_values_batch(A.copy(), B, genome_tensor)

@@ -703,7 +703,7 @@ standard方法: 平均适应度=49.50, 最大适应度=50.30, 改进率=4.27%, �
 
 我进行过多次测试,两种方法不一定哪个改进率高,说明对于不同基因组,不同的测试集,适用的模型不同,并且岛屿模型在这个问题里并没有明显的优越性
 
-最终改进率都较低,说明第一代基因表现的已经不错了
+最终改进率都较低,说明第一代基因表现的已经不错了(这和温启动也有关)
 
 
 
@@ -864,7 +864,9 @@ Transformer_predict(A, B, model, num_a=6, num_b=3) (实现见core_code)
     使用训练好的 Transformer 模型进行预测 (针对 A=6, B=3)。
     
     返回值: (最佳策略列表, 预测得分)
-
+    这里使用了一个启发式的判断 如果A和B没有交集，且B中没有重复元素  说明无法得分 这时候不需要进行预测,直接返回默认移动策略(事实上训练模型时，已经跳过了A,B没有交集的样本)  
+    
+    A和B没有交集无法得分很好理解 对于AB没有交集,且B中如果有重复元素 b1=b2,那么b1与b2可以分别插到A中,匹配规则依然成立,甚至如果b1插入A的第一个位置,b2插入最后一个位置 能获得sum(A)+sum(B)的得分
 
 
 
@@ -883,7 +885,7 @@ train_model(train_data, epochs, batch_size, model_path="transformer.pth",
                 num_a=6, num_b=3, warmup_epochs=5, lr_max=0.0005, lr_min=0.0000001,
                 patience=2, min_delta=0.01)
 
-在Epoch =11, LR: 0.0000001 时,由于早停终止训练 Average Loss为 0.0374
+在Epoch =12, LR: 0.0000001 时,由于早停终止训练 Average Loss约为 0.04
 
 transformer生成的pth格式模型有很强的黑箱性质 所以这里我们不直接分析它
 
@@ -1033,60 +1035,61 @@ data_transformer_fill.json
 
 由于5M的数据比较大  所以这里我转换成了jsonl格式，有助于提升效率
 
-运行比较函数,测试轮数为5000 
 
-算法1是GA 模型 算法2是transformer 模型:
+这里算法1代表遗传算法模型 算法2代表Transformer模型
+
+运行比较函数,测试轮数为20000
 
 
-
+所有轮次计算完成，开始统计数据...
 统计信息计算完成，准备输出...
 【算法1】
-  平均得分      : 52.19
-  中位数得分    : 53.00
-  得分标准差    : 12.80
-  最低得分      : 7
-  最高得分      : 97
+  平均得分      : 52.29
+  中位数得分    : 52.00
+  得分标准差    : 12.84
+  最低得分      : 4
+  最高得分      : 93
 
 【算法2】
-  平均得分      : 58.66
+  平均得分      : 58.56
   中位数得分    : 59.00
-  得分标准差    : 11.70
-  最低得分      : 7
-  最高得分      : 97
+  得分标准差    : 11.72
+  最低得分      : 2
+  最高得分      : 95
 
 【真实值】
-  平均得分      : 59.34
+  平均得分      : 59.20
   中位数得分    : 59.00
-  得分标准差    : 11.24
-  最低得分      : 24
-  最高得分      : 97
+  得分标准差    : 11.21
+  最低得分      : 21
+  最高得分      : 95
 
 【运行时间】
-    算法1运行时间: 10.28244400024414
-    算法2运行时间: 200.1817271709442
+    算法1运行时间: 61.802749156951904
+    算法2运行时间: 793.5203673839569
     
 【均方误差（MSE）】
-算法1与真实值的均方误差: 111.1778
+算法1与真实值的均方误差: 102.3177
 【均方误差（MSE）】
-算法2与真实值的均方误差: 15.1642
+算法2与真实值的均方误差: 12.09765
 --------------------
 
 【算法1与真实值的偏差分析】
 
 *所有偏差均按照真实值相应数据减去预测值相应数据的方式计算
-  均值偏差      : -7.14
+  均值偏差      : -6.91
   中位数偏差     : -5.00
-  标准差偏差    : 7.76
-  最低得分偏差      : -57
+  标准差偏差    : 7.39
+  最低得分偏差      : -39
   最高得分偏差      : 0
 
 【配对 t 检验】
-  t 统计量      : -65.095
+  t 统计量      : -132.234
   p 值          : 0.000e+00
   统计显著性    : 显著 (p < 0.05)
 
 【效应量分析 (Cohen's d)】
-  Cohen's d      : -0.921
+  Cohen's d      : -0.935
   影响程度      : 较大
 
 --------------------
@@ -1094,114 +1097,41 @@ data_transformer_fill.json
 【算法2与真实值的偏差分析】
 
 *所有偏差均按照真实值相应数据减去预测值相应数据的方式计算
-  均值偏差      : -0.68
+  均值偏差      : -0.63
   中位数偏差     : 0.00
-  标准差偏差    : 3.83
-  最低得分偏差      : -42
+  标准差偏差    : 3.42
+  最低得分偏差      : -51
   最高得分偏差      : 0
 
 【配对 t 检验】
-  t 统计量      : -12.512
-  p 值          : 2.154e-35
+  t 统计量      : -26.215
+  p 值          : 5.899e-149
   统计显著性    : 显著 (p < 0.05)
 
 【效应量分析 (Cohen's d)】
-  Cohen's d      : -0.177
+  Cohen's d      : -0.185
   影响程度      : 极小
 
 
 
 
-详细对比分析
-1. 预测准确性 (Accuracy)
+统计数据对比分析表
+...
 
 
-    均方误差 (MSE):
 
-        算法2 (15.16) 的MSE远小于 算法1 (111.18)。这表明算法2的预测值整体上与真实值的差距非常小，而算法1的预测误差要大得多（约7倍）。
-
-    核心统计数据对比:
-
-        平均值: 算法2的平均分 (58.66) 与真实值 (59.34) 非常接近，偏差仅为-0.68。而算法1的平均分 (52.19) 与真实值差距巨大，偏差高达-7.14。
-
-        中位数: 算法2的中位数 (59.00) 与真实值 完全一致，表现完美。而算法1的中位数 (53.00) 存在-5.00的偏差。
-
-        数据分布 (标准差): 算法2的标准差 (11.70) 也比算法1 (12.80) 更接近真实值 (11.24)，说明算法2不仅预测准了中心点，还更好地模拟了真实数据的离散程度。
-
-结论: 在所有衡量准确性的关键指标上，算法2都取得了压倒性的胜利。
-
-2. 统计学分析 (Statistical Analysis)
-
-统计检验结果进一步证实了算法2的优越性。
-
-    配对t检验: 两个算法的p值都极小（p < 0.05），说明它们的预测结果与真实值之间的差异都是统计上显著的，并非偶然。
-
-    效应量 (Cohen's d): 这是更关键的指标，它衡量了差异的实际影响大小。
-
-        算法1 (-0.921): 效应量为“较大”。这说明算法1的预测值与真实值不仅有统计差异，而且这个差异在实际应用中是非常明显、影响巨大的。
-
-        算法2 (-0.177): 效应量为“极小”。这说明算法2的预测值与真实值的差异虽然在统计上存在，但在实际应用中是微不足道的，几乎可以忽略不计。
-
-结论: 统计分析表明，算法1的误差是“严重”的，而算法2的误差是“轻微”的。
-3. 运行效率 (Performance)
-
-这是算法1唯一的优势。
-
-    算法1 (10.28秒) 的运行速度远快于 算法2 (200.18秒)，大约是后者的20倍。
-
-结论: 算法1在速度上有巨大优势。
-4. 共同的弱点 (Shared Weakness)
-
-    最低分预测: 两个算法都未能准确预测最低分。真实最低分为24，而两个算法的预测都是7。这表明两个模型可能都难以处理数据分布边缘的极值点。尽管如此，算法2的偏差（-42）仍然小于算法1的偏差（-57）。
 
 
 ![小提琴图与偏差条形图](Figure_1.png)
 
-图表详细分析
-左图：分数分布小提琴图 (Score Distribution Violin Plot)
 
-此图展示了真实分数与两种算法预测分数的整体数据分布情况。小提琴的形状代表数据密度，中间的箱线图显示了中位数、四分位数范围和极值。
 
-    中心趋势（中位数）:
+分析表:
+...
 
-        真实值 (Ground Truth) 和 算法2 的中位数（白线）几乎在同一水平线上（约59分），表明算法2准确地捕捉到了数据的中心点。
 
-        算法1 的中位数明显低于前两者（约52分），这直接说明算法1的预测结果整体偏低。
 
-    数据分布形状:
-
-        算法2 的小提琴形状与真实值的形状非常相似，特别是在数据最集中的区域（45-70分之间），说明算法2很好地模拟了真实数据的分布模式。
-
-        算法1 的形状虽然大致相似，但整体位置“下沉”，再次印证了其系统性低估的问题。
-
-    数据范围（极值）:
-
-        一个共同的缺陷: 两种算法预测的最低分（约7分）都远低于真实值的最低分（约25分）。这表明两个模型在处理极低分样本时都存在问题，预测过于极端。
-
-        最高分方面，三者基本一致（约97分）。
-
-左图： 小提琴图直观地显示，算法2在整体上成功复刻了真实数据的分布特征，而算法1则有明显的系统性偏差。
-右图：按真实分数区间的平均预测偏差 (Mean Prediction Bias by True Score Interval)
-
-此图是本次分析的关键，它将预测偏差（预测值 - 真实值）按不同的真实分数段进行了分解。偏差越接近0（红色虚线）代表预测越准。
-
-    算法2 (绿色条):
-
-        表现优异: 几乎所有绿色条都非常短，紧紧贴着0偏差线。这表明无论真实分数是高是低，算法2的预测都非常准确，偏差极小。
-
-        一致性: 这种低偏差的表现在所有分数段都保持一致，显示了模型的稳定性和泛化能力。
-
-    算法1 (蓝色条):
-
-        表现糟糕: 蓝色条普遍很长，并且全部处于负值区域，意味着算法1在所有分数段都存在显著的低估问题。
-
-        偏差巨大: 在大部分数据所在的中间分数段（如50-85分），平均偏差在-5分到-8分之间，这是非常大的误差。例如，对于一个真实得分80分的样本，算法1可能平均只预测了72-75分。
-
-        问题普遍存在: 从低分段到高分段，低估问题无处不在，说明这不是个例，而是模型固有的系统性偏差。
-
-右图小结： 偏差分析图提供了强有力的证据，证明了算法2的精准性。它揭示出算法1的误差存在系统性的普遍低估
-
-*注 :与真实值的偏差都是负的是因为我在训练时做了额外的启发式修正, 因为预测的值比真实值这个理论最佳得分还要好,是没有实际意义的
+*注 :与真实值的偏差都是负的是因为这是按照模型预测的操作,使用插入模拟函数 simulate_insertion_tool(代码见core_code) 获得的得分,这个值必然＜=理论最佳得分
 
 
 
@@ -1230,54 +1160,83 @@ data_transformer_fill.json
 同样的我们来看现在的transformer+GA 模型的评测结果
 
 
+统计信息计算完成，准备输出...
+【算法1】
+  平均得分      : 52.26
+  中位数得分    : 52.00
+  得分标准差    : 12.91
+  最低得分      : 5
+  最高得分      : 99
 
-
-【transformer+GA 】
-  平均得分      : 59.12
+【算法2】
+  平均得分      : 58.95
   中位数得分    : 59.00
-  得分标准差    : 11.26
+  得分标准差    : 11.34
   最低得分      : 13
-  最高得分      : 94
+  最高得分      : 99
 
 【真实值】
-  平均得分      : 59.34
+  平均得分      : 59.29
   中位数得分    : 59.00
-  得分标准差    : 11.18
+  得分标准差    : 11.19
   最低得分      : 22
-  最高得分      : 94
+  最高得分      : 99
 
 【运行时间】
-
-    transformer+GA 运行时间: 233.31103229522705
+    算法1运行时间: 62.15773296356201
+    算法2运行时间: 853.9594180583954
     
-
 【均方误差（MSE）】
-transformer+GA 与真实值的均方误差: 2.1468
+算法1与真实值的均方误差: 104.18385
+【均方误差（MSE）】
+算法2与真实值的均方误差: 3.84605
+--------------------
 
-
-【transformer+GA 与真实值的偏差分析】
+【算法1与真实值的偏差分析】
 
 *所有偏差均按照真实值相应数据减去预测值相应数据的方式计算
-  均值偏差      : -0.22
-  中位数偏差     : 0.00
-  标准差偏差    : 1.45
-  最低得分偏差      : -22
+  均值偏差      : -7.02
+  中位数偏差     : -5.00
+  标准差偏差    : 7.41
+  最低得分偏差      : -39
   最高得分偏差      : 0
 
 【配对 t 检验】
-  t 统计量      : -10.598
-  p 值          : 5.721e-26
+  t 统计量      : -134.153
+  p 值          : 0.000e+00
   统计显著性    : 显著 (p < 0.05)
 
 【效应量分析 (Cohen's d)】
-  Cohen's d      : -0.150
+  Cohen's d      : -0.949
+  影响程度      : 较大
+
+--------------------
+
+【算法2与真实值的偏差分析】
+
+*所有偏差均按照真实值相应数据减去预测值相应数据的方式计算
+  均值偏差      : -0.34
+  中位数偏差     : 0.00
+  标准差偏差    : 1.93
+  最低得分偏差      : -30
+  最高得分偏差      : 0
+
+【配对 t 检验】
+  t 统计量      : -24.974
+  p 值          : 1.404e-135
+  统计显著性    : 显著 (p < 0.05)
+
+【效应量分析 (Cohen's d)】
+  Cohen's d      : -0.177
   影响程度      : 极小
 
 
 
 
 
-结果比较,我们的transformer+GA 模型比单纯的transformer模型还要好!  猜想是成立的  GA在5000次运行中辅助了transformer137次(assist_count=137) 虽然"辅助"的次数占比很低(137/5000≈0.27)，但是对精度带来了显著影响,并且只多了10%的时间
+结果比较,我们的transformer+GA 模型比单纯的transformer模型还要好!  猜想是成立的  GA在20000次运行中辅助了transformer155次 虽然"辅助"的次数占比极低(155/20000=0.00775)，但是对精度(MSE)带来了显著影响,并且只多了7.6% (853/793≈1.076) 的时间
+
+
 
 
 但是还没完 我们要回到"跳过"方法来处理数据集 
@@ -1291,74 +1250,9 @@ transformer+GA 与真实值的均方误差: 2.1468
 
 训练模型并保存 使用和"填充"方法相同的评测方法  得到 (算法1代表遗传算法  算法2代表transformer)
 
-【算法1】
-  平均得分      : 52.24
-  中位数得分    : 53.00
-  得分标准差    : 12.64
-  最低得分      : 8
-  最高得分      : 86
 
-【算法2】
-  平均得分      : 57.52
-  中位数得分    : 59.00
-  得分标准差    : 13.85
-  最低得分      : 2
-  最高得分      : 95
-
-【真实值】
-  平均得分      : 59.41
-  中位数得分    : 59.00
-  得分标准差    : 11.28
-  最低得分      : 22
-  最高得分      : 95
-
-【运行时间】
-    算法1运行时间: 9.785958766937256
-    算法2运行时间: 190.11521172523499
-    
-【均方误差（MSE）】
-算法1与真实值的均方误差: 108.8502
-【均方误差（MSE）】
-算法2与真实值的均方误差: 49.1314
---------------------
-
-【算法1与真实值的偏差分析】
-
-*所有偏差均按照真实值相应数据减去预测值相应数据的方式计算
-  均值偏差      : -7.17
-  中位数偏差     : -5.00
-  标准差偏差    : 7.58
-  最低得分偏差      : -51
-  最高得分偏差      : 0
-
-【配对 t 检验】
-  t 统计量      : -66.899
-  p 值          : 0.000e+00
-  统计显著性    : 显著 (p < 0.05)
-
-【效应量分析 (Cohen's d)】
-  Cohen's d      : -0.946
-  影响程度      : 较大
-
---------------------
-
-【算法2与真实值的偏差分析】
-
-*所有偏差均按照真实值相应数据减去预测值相应数据的方式计算
-  均值偏差      : -1.88
-  中位数偏差     : 0.00
-  标准差偏差    : 6.75
-  最低得分偏差      : -53
-  最高得分偏差      : 0
-
-【配对 t 检验】
-  t 统计量      : -19.719
-  p 值          : 2.053e-83
-  统计显著性    : 显著 (p < 0.05)
-
-【效应量分析 (Cohen's d)】
-  Cohen's d      : -0.279
-  影响程度      : 较小
+分析表:
+...
 
 
 回顾之前的训练结果 真实值的分数分布(平均得分,中位数得分,得分标准差,最高,最低得分等等)算是很接近的 所以我们可以将两次测试进行比较  显著的是 , 虽然算法1(遗传算法)各项数据受影响不大  但是算法2(transformer)的MSE明显提高了,与真实值的偏差明显变大,效应量分析也从极小变成了较小
@@ -1385,7 +1279,8 @@ Transformer 模型：其模型架构和计算方式是并行的，非常适合�
 
 #批处理集成模型预测函数
 
-def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model, num_a=6, num_b=3, device='cuda'):
+def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model, num_a=6, num_b=3, device='cuda')
+(实现见core_code)
     """
     批量使用训练好的 Transformer 模型进行预测 (针对 A=6, B=3)。
 
@@ -1400,167 +1295,11 @@ def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model
     返回:
         列表: moves_batch
     """
-    try:
-        batch_size = len(A_batch)
-   
-
-
-        # 检查模型类型
-        if not isinstance(TR_model, TransformerMovePredictor):
-            raise ValueError(f"需要 TransformerMovePredictor 实例, 但得到 {type(TR_model)}")
-
-        TR_model.eval()
-
-        # 分类样本：快速路径和需要模型推理的
-        fast_path_indices = []
-        model_inference_indices = []
-
-        for i in range(batch_size):
-            A = A_batch[i]
-            B = B_batch[i]
-
-            # 检查长度
-            if len(A) != num_a or len(B) != num_b:
-                raise ValueError("...")
-
-            # 快速路径检查
-            if not set(A) & set(B) and len(B) == len(set(B)):
-                fast_path_indices.append(i)
-            else:
-                model_inference_indices.append(i)
-
-        # 初始化结果列表，使其长度与batch_size相同
-        moves_batch = [None] * batch_size
-      
-
-        # 处理快速路径样本
-        for idx in fast_path_indices:
-            moves_batch[idx] = [[0, 0], [1, 0], [2, 0]]
-        
-
-        # 如果没有需要模型推理的样本，直接返回
-        if not model_inference_indices:
-            return moves_batch
-
-        # 准备模型推理的批量数据
-        all_features = []
-
-        for idx in model_inference_indices:
-            A = A_batch[idx]
-            B = B_batch[idx]
-
-            # 1. 计算序列和
-            A_sum = sum(A)
-
-            # 2. 计算B序列中重复的元素数
-            B_counter = {}
-            for val in B:
-                B_counter[val] = B_counter.get(val, 0) + 1
-            B_duplicates = sum(count - 1 for count in B_counter.values())
-
-            # 3. 交集特征
-            intersection = set(A) & set(B)
-            intersection_size = len(intersection)
-
-            # 4. 位置特征
-            positions_in_A = {}
-            for i, a_val in enumerate(A):
-                positions_in_A[a_val] = i
-
-            # 创建增强的输入序列
-            enhanced_sequence = []
-
-            # 处理A序列
-            for i, val in enumerate(A):
-                is_in_intersection = 1.0 if val in intersection else 0.0
-                relative_position = i / num_a
-                relative_size = val / A_sum if A_sum != 0 else 0
-                intersection_ratio = intersection_size / num_b
-
-                enhanced_sequence.append([
-                    val,  # 原始值
-                    val / A_sum if A_sum != 0 else 0,  # 值占A总和的比例
-                    is_in_intersection,  # 是否在交集中
-                    relative_position,  # 相对位置
-                    relative_size,  # 相对大小（占总和的比例）
-                    intersection_ratio  # 交集大小比例
-                ])
-
-            # 处理B序列
-            for i, val in enumerate(B):
-                is_in_A = 1.0 if val in A else 0.0
-                position_in_A = positions_in_A.get(val, -1)
-                relative_position_in_A = position_in_A / num_a if position_in_A >= 0 else -0.1
-
-                # 计算未来得分特征
-                remaining_B = B[i + 1:] if i < len(B) - 1 else []
-                future_score = calculate_future_score(A, remaining_B)
-                future_score_ratio = future_score / (sum(A) + sum(B)) if (sum(A) + sum(B)) > 0 else 0
-
-                enhanced_sequence.append([
-                    val,  # 原始值
-                    future_score_ratio,  # 未来得分比例
-                    is_in_A,  # 是否在A中
-                    relative_position_in_A,  # 在A中的相对位置（如果存在）
-                    B_duplicates / num_b,  # B中重复元素的比例
-                    intersection_ratio  # 交集大小比例
-                ])
-
-            all_features.append(enhanced_sequence)
-
-        # 转换为批量张量并送入GPU
-        input_tensor = torch.FloatTensor(np.array(all_features, dtype=np.float32)).to(device)
-
-        # 批量推理
-        with torch.no_grad():
-            order_logits, pos_preds = TR_model(input_tensor)
-
-        # 处理每个样本的结果
-        for batch_idx, original_idx in enumerate(model_inference_indices):
-            A = A_batch[original_idx]
-            B = B_batch[original_idx]
-
-            # 获取该样本的预测结果
-            sample_order_logits = order_logits[batch_idx].unsqueeze(0)
-            sample_pos_preds = pos_preds[batch_idx].unsqueeze(0)
-
-            # 使用与原始函数相同的后处理逻辑
-            pred_order_indices = sample_order(sample_order_logits).squeeze(0).cpu().numpy()
-            pred_moves_raw = sample_pos_preds.squeeze(0).cpu().numpy()
-
-            pos_range_base = len(A)
-            pred_moves_clipped = [int(np.clip(p, 0, pos_range_base + k)) for k, p in enumerate(pred_moves_raw)]
-
-            moves_TR = [[int(pred_order_indices[k]), pred_moves_clipped[k]] for k in range(num_b)]
-            
-            #使用GA模型的预测进行辅助 实现集成模型
-            True_score_TR=strategy_TrueScore(A,B,moves_TR)
-
-            move_GA=GA_Strategy(genomeforassist,A, B)
-
-            True_score_GA=strategy_TrueScore(A,B,move_GA)
-
-
-            # pred_score = calculate_score(A, B, final_order, final_moves)
-
-            # 比较并保存结果
-            if True_score_GA<True_score_TR:
-
-                moves_batch[original_idx] = moves_TR
-          
-            else:
-                moves_batch[original_idx] = move_GA
-
-        return moves_batch
-
-    except Exception as e:
-        ...
-
-        return moves_batch
+    
 
 
 
-
+使用了一个小技巧,使用"black_hole"函数修改一个全局变量来保证解释器不会优化未使用的函数。 防止计算运行时间时不准确
 
 
 def black_hole(value):
@@ -1810,7 +1549,9 @@ def predict():
 经测试服务器能返回预期的值
 
 
-为了方便调试,没有对服务器进行打包 ,而使用一个bat脚本启动服务器
+然后使用docker对server容器化:
+
+
 
 
 

@@ -170,7 +170,7 @@ def generate_training_data(num_samples=10000):
     for i in range(num_samples):
 
 
-#deal_cards_tool()是在外部定义的函数  随机初始化了A,B ,并确保了A,B有交集 这里将A,B没有交集(怎么出牌都无法得分的情况)视为噪声排除,不需要参与训练
+#deal_cards_tool()是在外部定义的函数  随机初始化了A,B ,并确保了A,B有交集 这里将A,B没有交集(怎么出牌都无法得分的情况)视为噪声排除,不需要参与训练,
 
         A, B = deal_cards_tool()  # 初始A, B   A, B 都是 list<int>
 
@@ -863,7 +863,7 @@ class TransformerMovePredictor(nn.Module):
 
 def prepare_data_transformer(sample: dict, num_a=6, num_b=3):
     """
-    数据预处理：构建输入序列和目标输出，添加修改后的特征工程。
+    数据预处理：构建输入序列和目标输出，添加特征工程。
     """
 
 
@@ -872,11 +872,11 @@ def prepare_data_transformer(sample: dict, num_a=6, num_b=3):
     best_moves = sample["best_moves"]
 
     if len(A) != num_a or len(B) != num_b:
-        
+        print(f"Warning: Skipping sample with A={A}, B={B} due to unexpected length (expected A:{num_a}, B:{num_b}).")
         return None, None, None
 
-    # 新增特征计算
-    A_sum = sum(A)  # A序列的和
+
+
 
 
     # 计算B序列中重复的元素数
@@ -897,20 +897,31 @@ def prepare_data_transformer(sample: dict, num_a=6, num_b=3):
     # 创建增强的输入序列
     enhanced_sequence = []
 
+    A_min = min(A)
+    A_max = max(A)
+    B_min = min(B)
+    B_max = max(B)
+    A_mean = np.mean(A)
+    A_std = np.std(A)
+    # B_mean = np.mean(B)
+    # B_std = np.std(B)
     # 处理A序列
     for i, val in enumerate(A):
-        is_in_intersection = 1.0 if val in intersection else 0.0
-        relative_position = i / num_a
-        relative_size = val / A_sum if A_sum != 0 else 0  # 使用与总和的比例代替相对大小
-        intersection_ratio = intersection_size / num_b
 
+        relative_position = i / num_a
+
+        # z_score = (val - A_mean) / A_std if A_std > 0 else 0.0
+        range_size = A_max - A_min
+        min_max_scaled = (val - A_min) / range_size if range_size > 0 else 0.0
+        is_extreme = 1.0 if (val == A_min or val == A_max) else 0.0
+        z_score = (val - A_mean) / A_std if A_std > 0 else 0.0
         enhanced_sequence.append([
-            val,  # 原始值
-            val / A_sum if A_sum != 0 else 0,  # 值占A总和的比例
-            is_in_intersection,  # 是否在交集中
-            relative_position,  # 相对位置
-            relative_size,  # 相对大小（占总和的比例）
-            intersection_ratio  # 交集大小比例
+            val/sum(A),  # 本身的值占A的元素总和的比例
+            is_extreme,  # 是否是极值
+            z_score,#该值与均值之间的距离
+            relative_position,  # 该元素在A中的相对位置
+            min_max_scaled,  #将一个值等比例地映射到 [0, 1] 区间
+            intersection_size/num_a  # A与B交集大小
         ])
 
     # 处理B序列
@@ -918,24 +929,25 @@ def prepare_data_transformer(sample: dict, num_a=6, num_b=3):
         is_in_A = 1.0 if val in A else 0.0
         position_in_A = positions_in_A.get(val, -1)
         relative_position_in_A = position_in_A / num_a if position_in_A >= 0 else -0.1
-        # relative_size = val / B_sum if B_sum != 0 else 0  # 使用与总和的比例
 
+        is_extreme = 1.0 if (val == B_min or val == B_max) else 0.0
+        # z_score = (val - B_mean) / B_std if B_std > 0 else 0.0
         # 计算未来得分特征
-        # 计算剩余B的未来得分
+        # 假设当前B[i]已经被处理，计算剩余B的未来得分
         remaining_B = B[i + 1:] if i < len(B) - 1 else []
         future_score = calculate_future_score(A, remaining_B)
         future_score_ratio = future_score / (sum(A) + sum(B)) if (sum(A) + sum(B)) > 0 else 0
 
         enhanced_sequence.append([
-            val,  # 原始值
-            # val / B_sum if B_sum != 0 else 0,  # 值占B总和的比例
-            future_score_ratio,  #未来得分比例
+            val/sum(B),  # 本身的值占B的元素总和的比例
+
+            future_score_ratio,  # 未来得分占可能的最大得分(全部消除)的占比
 
             is_in_A,  # 是否在A中
-            relative_position_in_A,  # 在A中的相对位置（如果存在）
-            B_duplicates / num_b,  # B中重复元素的比例
+            relative_position_in_A,  # 该值在A中的相对位置（不存在为-0.1）
+            B_duplicates / num_b,  # B中重复元素占所有B元素数的比例
 
-            intersection_ratio  # 交集大小比例
+            is_extreme  # 是否是极值
         ])
 
     # 将序列转换为numpy数组
@@ -945,13 +957,17 @@ def prepare_data_transformer(sample: dict, num_a=6, num_b=3):
     pos_target = np.array([move[1] for move in best_moves], dtype=np.float32)
 
     if len(set(order_target)) != num_b:
-            return None, None, None
+        print(f"Warning: Skipping sample with invalid order target in best_moves: {order_target}")
+        return None, None, None
 
 
     result = (input_sequence, order_target, pos_target)
 
 
     return result
+
+
+
 
 
     def Transformer_predict(A, B, model, num_a=6, num_b=3):
@@ -1689,7 +1705,8 @@ def deal_cards_tool():
             A.append(card)
 
     available_A = [card for card in deck if card in a_unique]
-    # 第一张牌必须是与A中某张牌数字相同的牌
+    # 第一张牌必须是与A中某张牌数字相同的牌,这保证了A与B不可能没有交集 
+    #当预测集如果出现交集为空,因为此时无论如何都无法得分 ,可以直接返回得分为0的固定策略
     selected = random.choice(available_A)
     deck.remove(selected)  # 从剩余牌中移除选中的牌
     B = [selected]

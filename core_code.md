@@ -1762,3 +1762,317 @@ def TestModel_with_given_A_B(other_model, A, B):
         print(f"strategy: {strategy}")
         print(f"A: {A}")
         print(f"B: {B}")
+
+def execution_time():
+
+    total_time_transformer_P_GA = 0
+
+    total_time_recursive = 0
+
+    num_iterations = 20000  # 迭代次数
+
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # transformer预测初始化 参数需和训练时一致
+
+    num_a_test = 6
+
+    num_b_test = 3
+
+
+    d_model = 256
+
+    nhead = 4
+
+    num_encoder_layers = 3
+
+    dim_feedforward = 512
+
+
+
+    model1 = TransformerMovePredictor(
+
+        num_a=num_a_test, num_b=num_b_test, d_model=d_model,
+
+        nhead=nhead, num_encoder_layers=num_encoder_layers,
+
+        dim_feedforward=dim_feedforward
+
+    ).to(device)
+
+
+    A_batch = []
+
+    B_batch = []
+
+    test_cases=[]
+
+
+    # 辅助GA模型和Transformer模型载入
+    genomeforassist = load_best_genome(path_GA)
+
+    model1.load_state_dict(torch.load(path_tranformer, map_location=device))
+
+    # A,B数据准备
+    for i in range(num_iterations):
+
+        A, B = deal_cards_tool()
+
+        A_batch.append(A)
+
+        B_batch.append(B)
+
+
+        test_cases.append((list(A), list(B)))
+
+
+    #计算Transform+GA 预测 运行的时间--------------------------------------------------------------
+
+    start_time_t = time.perf_counter()
+
+    move_t = Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, model1, num_a=num_a_test, num_b=num_b_test)
+
+
+    # 因为得到的返回值move是批次的(列表),这里模拟将得到的列表中的元素取出操作消耗的时间
+
+    for item in move_t:
+        black_hole(item)
+
+
+    end_time_t = time.perf_counter()
+
+
+
+    total_time_transformer_P_GA += (end_time_t - start_time_t)
+    #GA算法运行的时间 -----------------------------------------------------------------------------
+    total_time_GA=0
+    start_time_g = time.perf_counter()
+    for A_copy, B_copy in test_cases:
+        move_GA = GA_Strategy(genomeforassist, A_copy, A_copy)
+
+        # 保证解释器不优化未使用的move_GA
+        black_hole(move_GA)
+    end_time_g = time.perf_counter()
+
+    total_time_GA += (end_time_g - start_time_g)
+
+    #递归穷举运行的时间-----------------------------------------------------------------------------
+    start_time_r = time.perf_counter()
+
+    for A_copy, B_copy in test_cases:
+        move_r = recursive_Strategy(A_copy, B_copy)
+
+    #保证解释器不优化未使用的move_r
+        black_hole(move_r)
+
+    end_time_r = time.perf_counter()
+
+    total_time_recursive += (end_time_r - start_time_r)
+    #--------------------------------------------------------------------------------------------
+
+
+
+
+def Transformer_predict_batch_plus_GA(A_batch, B_batch,genomeforassist, TR_model, num_a=6, num_b=3, device='cuda'):
+    """
+    批量使用训练好的 Transformer 模型进行预测 (针对 A=6, B=3)。
+
+    参数:
+        A_batch: 列表的列表，每个内部列表是一个A序列，长度为num_a
+        B_batch: 列表的列表，每个内部列表是一个B序列，长度为num_b
+        model: TransformerMovePredictor模型实例
+        num_a: A序列的长度，默认为6
+        num_b: B序列的长度，默认为3
+        device: 计算设备，默认为'cuda'
+
+    返回:
+        两个列表: (moves_batch, scores_batch)
+    """
+    try:
+        batch_size = len(A_batch)
+        # moves_batch = []
+        # scores_batch = []
+
+        # 检查模型类型
+        if not isinstance(TR_model, TransformerMovePredictor):
+            raise ValueError(f"需要 TransformerMovePredictor 实例, 但得到 {type(TR_model)}")
+
+        TR_model.eval()
+
+        # 分类样本：快速路径和需要模型推理的
+        fast_path_indices = []
+        model_inference_indices = []
+
+        for i in range(batch_size):
+            A = A_batch[i]
+            B = B_batch[i]
+
+            # 检查长度
+            if len(A) != num_a or len(B) != num_b:
+                raise ValueError(
+                    f"样本 {i}: DNNpredict 期望输入 A 长度为 {num_a}, B 长度为 {num_b}, 但收到 A:{len(A)}, B:{len(B)}")
+
+            # 快速路径检查
+            if not set(A) & set(B) and len(B) == len(set(B)):
+                fast_path_indices.append(i)
+            else:
+                model_inference_indices.append(i)
+
+        # 初始化结果列表，使其长度与batch_size相同
+        moves_batch = [None] * batch_size
+        # scores_batch = [None] * batch_size
+
+        # 处理快速路径样本
+        for idx in fast_path_indices:
+            moves_batch[idx] = [[0, 0], [1, 0], [2, 0]]
+            # scores_batch[idx] = 0
+
+        # 如果没有需要模型推理的样本，直接返回
+        if not model_inference_indices:
+            return moves_batch
+
+        # 准备模型推理的批量数据
+        all_features = []
+
+        for idx in model_inference_indices:
+            A = A_batch[idx]
+            B = B_batch[idx]
+
+            # 计算B序列中重复的元素数
+            B_counter = {}
+            for val in B:
+                B_counter[val] = B_counter.get(val, 0) + 1
+            B_duplicates = sum(count - 1 for count in B_counter.values())  # 重复的元素数
+
+            # 交集特征
+            intersection = set(A) & set(B)
+            intersection_size = len(intersection)
+
+            # 位置特征
+            positions_in_A = {}
+            for i, a_val in enumerate(A):
+                positions_in_A[a_val] = i
+
+            # 创建增强的输入序列
+            enhanced_sequence = []
+
+            A_min = min(A)
+            A_max = max(A)
+            B_min = min(B)
+            B_max = max(B)
+            A_mean = np.mean(A)
+            A_std = np.std(A)
+            # B_mean = np.mean(B)
+            # B_std = np.std(B)
+            # 处理A序列
+            for i, val in enumerate(A):
+                relative_position = i / num_a
+
+                # z_score = (val - A_mean) / A_std if A_std > 0 else 0.0
+                range_size = A_max - A_min
+                min_max_scaled = (val - A_min) / range_size if range_size > 0 else 0.0
+                is_extreme = 1.0 if (val == A_min or val == A_max) else 0.0
+                z_score = (val - A_mean) / A_std if A_std > 0 else 0.0
+                enhanced_sequence.append([
+                    val / sum(A),  # 本身的值占A的元素总和的比例
+                    is_extreme,  # 是否是极值
+                    z_score,  # 该值与均值之间的距离
+                    relative_position,  # 该元素在A中的相对位置
+                    min_max_scaled,  # 将一个值的原始位置，等比例地映射到 [0, 1] 区间
+                    intersection_size/num_a  # A与B交集大小
+                ])
+
+            # 处理B序列
+            for i, val in enumerate(B):
+                is_in_A = 1.0 if val in A else 0.0
+                position_in_A = positions_in_A.get(val, -1)
+                relative_position_in_A = position_in_A / num_a if position_in_A >= 0 else -0.1
+
+                is_extreme = 1.0 if (val == B_min or val == B_max) else 0.0
+                # z_score = (val - B_mean) / B_std if B_std > 0 else 0.0
+                # 计算未来得分特征
+                # 假设当前B[i]已经被处理，计算剩余B的未来得分
+                remaining_B = B[i + 1:] if i < len(B) - 1 else []
+                future_score = calculate_future_score(A, remaining_B)
+                future_score_ratio = future_score / (sum(A) + sum(B)) if (sum(A) + sum(B)) > 0 else 0
+
+                enhanced_sequence.append([
+                    val / sum(B),  # 本身的值占B的元素总和的比例
+
+                    future_score_ratio,  # 未来得分占可能的最大得分(全部消除)的占比
+
+                    is_in_A,  # 是否在A中
+                    relative_position_in_A,  # 该值在A中的相对位置（不存在为-0.1）
+                    B_duplicates / num_b,  # B中重复元素占所有B元素数的比例
+
+                    is_extreme  # 是否是极值
+                ])
+
+            all_features.append(enhanced_sequence)
+
+        # 转换为批量张量并送入GPU
+        input_tensor = torch.FloatTensor(np.array(all_features, dtype=np.float32)).to(device)
+
+        # 批量推理
+        with torch.no_grad():
+            order_logits, pos_preds = TR_model(input_tensor)
+
+        # 处理每个样本的结果
+        for batch_idx, original_idx in enumerate(model_inference_indices):
+            A = A_batch[original_idx]
+            B = B_batch[original_idx]
+
+            # 获取该样本的预测结果
+            sample_order_logits = order_logits[batch_idx].unsqueeze(0)
+            sample_pos_preds = pos_preds[batch_idx].unsqueeze(0)
+
+            # 使用与原始函数相同的后处理逻辑
+            pred_order_indices = sample_order(sample_order_logits).squeeze(0).cpu().numpy()
+            pred_moves_raw = sample_pos_preds.squeeze(0).cpu().numpy()
+
+            pos_range_base = len(A)
+            pred_moves_clipped = [int(np.clip(p, 0, pos_range_base + k)) for k, p in enumerate(pred_moves_raw)]
+
+            moves_TR = [[int(pred_order_indices[k]), pred_moves_clipped[k]] for k in range(num_b)]
+
+            True_score_TR = strategy_TrueScore(A, B, moves_TR)
+            # ----------------------------------------------------------------------------------------------------------
+            # todo: ⚠️这个代码块集成了GA⚠️
+
+
+            move_GA=GA_Strategy(genomeforassist,A, B)
+
+            True_score_GA=strategy_TrueScore(A,B,move_GA)
+
+
+            # 比较并保存结果
+            if True_score_GA<True_score_TR:
+
+                moves_batch[original_idx] = moves_TR
+
+            else:
+                moves_batch[original_idx] = move_GA
+
+            #----------------------------------------------------------------------------------------------------------
+
+        return moves_batch
+
+    except Exception as e:
+        print(f"批量使用 Transformer 预测时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("返回默认策略")
+
+        # 对于错误情况，为每个样本返回默认策略
+        moves_batch = []
+        # scores_batch = []
+        for i in range(batch_size):
+            A = A_batch[i]
+            B = B_batch[i]
+            default_strategy = [[j, 1] for j in range(len(B))]
+            # default_score = calculate_score_by_strategy(A, B, default_strategy)
+            moves_batch.append(default_strategy)
+            # scores_batch.append(default_score)
+
+        return moves_batch

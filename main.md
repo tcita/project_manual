@@ -1501,8 +1501,7 @@ def predict():
 经测试服务器能返回预期的值
 
 
-然后使用docker对server容器化:
-
+然后使用docker对server容器化
 
 
 

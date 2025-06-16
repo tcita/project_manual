@@ -1318,7 +1318,13 @@ data_transformer_fill.json
 Transformer 模型：其模型架构和计算方式是并行的，非常适合进行使用GPU批处理预测(这也是神经网络的优点之一)。
 
 
-所以我这里将Transformer的预测改为批处理  遗传算法的与其并行预测?
+所以我这里将Transformer的预测改为批处理 
+
+并使用ThreadPoolExecutor 启动两个线程，一个用于 GA，一个用于 Transforme 遗传算法的与其并行预测,GA是CPU密集的,transformer是GPU密集的,这样做很好的利用了硬件性能, 虽然代码会收到GIL(全局解释器锁)的影响 但是它依然能很好的提速
+
+当使用 GPU 时：Transformer 推理任务主要由 GPU 执行，而 GA 任务由 CPU 执行。threading 协调了这两者，实现了 GPU 和 CPU 资源的真正并行使用，因为 GPU 计算不依赖于 GIL。
+
+当仅使用 CPU 时：虽然两个任务都在 CPU 上，但由于 PyTorch 和 NumPy 库 在其核心计算部分会释放 GIL，GA 线程仍然可以在 Transformer 线程等待其 C++ 后端完成计算时获取GIL,获得执行机会。这虽然不是完美的硬件并行，但仍然比串行执行要快得多。
 
 
 
@@ -1370,25 +1376,27 @@ def black_hole(value):
 
 在20000次迭代后  这是我的结果(这里的batch_size和训练时一样,是2048):
 
---- Comparison Complete ---
-
-Total time for Transformer:      104.682714 seconds
-Total time for Transformer+GA:      53.280247 seconds
-
-Total time for GA: 69.549328 seconds
-
-Total time for recursive_Strategy: 55.637155 seconds
+Total time for Transformer+GA(批处理和并行优化):      42.785322 seconds
 
 
+Total time for Transformer(未优化,串行执行):      63.076156 seconds
 
-在A的长度为6,B的长度为3的情况下,这时候的递归算法在数据规模这样小的情况速度是比较快的,这里的测试中实现的集成模型运行时间比它还稍快一点
+Total time for GA: 48.705127 seconds
 
-不使用批处理的Transformer预测与GA比较时,速度大概是GA的1/13   
+Total time for recursive_Strategy: 47.794147 seconds
+
+
+
+
+未优化的Transformer预测与GA比较时,速度大概是GA的0.77%
+
 但是如果使用了批处理 情况就完全不同了 
-在数据规模到了一定程度后,再使用批处理带来的提升是非常明显的,对照串行的Transformer,它的运行速度翻倍了  
 
-但是集成模型的涉及到模型结果的选择,这时候需要调用 strategy_TrueScore(A,B,move_GA) 去计算本次策略的真正得分(虽然GA和Transformer也能预测得分但是存在误差,用来精确判断哪个模型更优是不可信的) 频繁调用 strategy_TrueScore   会带来不小的额外的开销
+在数据规模到了一定程度后且允许流式处理的情况下,使用批处理带来的提升是非常明显的,简单的估计,如果未优化的情况,集成Transformer和GA的模型的运行时间应该大于
 
+48.7+63.1= 111.8 s 
+
+但是这里的测试中实现的优化过的集成模型运行时间反而是最短的,证明了我们的优化是很有效的
 
 
 
@@ -1397,7 +1405,10 @@ Total time for recursive_Strategy: 55.637155 seconds
 
 ## 第三部分  服务器搭建与游戏架构
 
-现在我们使用之前讨论好的Transformer+GA的集成模型(以下统称"集成模型")构建一个本地的服务器 它会与unity游戏(客户端)进行数据交互,客户端传入A,B  服务器会根据传入的A,B进行预测,返回策略(best_move),然后返回预测结果给客户端进行自动操作
+
+因为游戏中PVE场景,策略是即时性的,而且就算是性能较低的串行实现,AI的计算单次请求的时间足够短了(63/20000=0.00315s=3.15ms),我们还是使用只使用cpu的串行GA+transformer集成模型,将它打包为服务器
+
+它会与unity游戏(客户端)进行数据交互,客户端传入A,B  服务器会根据传入的A,B进行预测,返回策略(best_move),然后返回预测结果给客户端进行自动操作
 
 
 这里使用的web框架是flask

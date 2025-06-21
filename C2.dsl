@@ -16,7 +16,7 @@ workspace "Containers for Unity Card Game" {
     views {
         container unityCardGame "Containers" {
             include *
-            autoLayout
+            autoLayout lr
         }
     }
 }

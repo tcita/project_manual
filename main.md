@@ -1503,19 +1503,42 @@ docker compose up
 
 Unity的编程规范与通用软件开发有显著区别。unity的C#脚本代码与unity本身的组件的深度耦合,要完整理解一段代码的功能，必须基于对unity引擎本身有的一定理解。
 
-我是基于unity社区框架开发的,其中在代码层面,最难的是理清楚框架API的逻辑和复杂的继承关系 和 如何使用各种API与unity的组件结合来达成我想要的功能.这很难通过文字描述,并与本文的内容主题有一定脱节,所以在这里我给出了我设计并实现的unity架构的C4 model 图片 来解释这个unity客户端,将我们的关注点放在软件架构上:
+我是基于unity社区框架开发的,其中在代码层面,最难的是 理清楚框架API的逻辑和复杂的继承关系 和 如何使用各种API与unity的组件结合来达成我想要的功能,这很难通过文字描述,并与本文的内容主题有一定脱节.所以在这里我给出了我设计并实现的unity架构的C4 model 图片 来解释这个unity客户端,将我们的关注点放在软件架构上:
 
 
 
 使用drawio绘制草稿后编写dsl脚本,渲染为png格式图片:
 
 
-[![C1架构图](c1.png)]
-[![C1架构图](c2.png)]
-[![C3架构图](c3.png)]
+<style>
+  /* 这是CSS样式，告诉PDF渲染器如何处理图片 */
+  img {
+    page-break-inside: avoid; /* 核心规则：禁止在图片内部断页 */
+    max-width: 100%;          /* 确保图片不会超出页面宽度 */
+    display: block;           /* 让图片成为一个块级元素，方便设置边距 */
+    margin-top: 20px;         /* 图片上方留出一些空白 */
+    margin-bottom: 20px;      /* 图片下方留出一些空白 */
+    margin-left: auto;        /* 配合下一行，让图片水平居中 */
+    margin-right: auto;
+  }
+</style>
 
 
-这里举例介绍一些设计软件架构使用的设计模式
+<img src="c1.png" alt="level 1">
+
+### Context Diagram 
+
+<img src="c2.png" alt="level 2">
+
+### Container Diagram
+
+
+<img src="c3.png" alt="level 3">
+
+### Component Diagram
+
+
+这里举例介绍一些这个unity客户端使用的设计模式
 
 
 单例模式

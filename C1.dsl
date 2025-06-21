@@ -10,7 +10,7 @@ workspace "System Context for Unity Card Game" {
     views {
         systemContext unityCardGame "SystemContext" {
             include *
-            autoLayout
+            autoLayout lr
         }
     }
 }

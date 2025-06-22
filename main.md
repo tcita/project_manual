@@ -2,14 +2,14 @@
 <script type="text/x-mathjax-config">
     MathJax.Hub.Config({ tex2jax: {inlineMath: [['$', '$']]}, messageStyle: "none" });
 </script>
-# AI驱动的卡牌游戏---使用ai模型计算 NP-Complete 序列插入匹配得分最大化问题
+# 一个NP-Complete卡牌游戏最优策略的启发式求解与AI代理实现
 
 ## 概述
-这是一款我独立设计并实现的,规则简单,需要运气和策略的 Unity 引擎开发的回合制PVE卡牌游戏，电脑的策略基于一个部署了训练好的ai模型的本地服务器。
+我独立设计并实现了一款,规则简单,需要运气和策略的 Unity 引擎开发的回合制PVE卡牌游戏，电脑的策略基于一个部署了训练好的ai模型的本地服务器。
 
 我将游戏规则抽象为基于特定规则的子序列和得分最大化问题并深入研究它. 
 
-在一定规模下,我发现了决策空间随着操作步数呈组合爆炸式增长,为了从根本上理解问题的计算复杂性，我分析了该卡牌游戏的泛化版本。通过将其规约为子集和问题，证明了该问题是NP-hard且是NP-Complete的。这一结论深刻地揭示了，任何试图寻找通用精确解的算法（如穷举搜索）都将面临不可避免的扩展性瓶颈。正因如此，当问题规模稍大时，精确解在计算上变得不可行。这为我们项目的核心策略——即放弃对通用精确解的幻想，转而研究在特定规模下，使用AI代理模型来高效逼近最优解——提供了坚实的理论依据。
+我发现了实际的决策空间随着操作步数呈组合爆炸式增长,为了从根本上理解问题的计算复杂性，我分析了该卡牌游戏的泛化版本。通过将其规约为子集和问题，证明了该问题是NP-Hard而且是NP-Complete的。这一结论深刻地揭示了，任何试图寻找通用精确解的算法（如穷举搜索）都将面临不可避免的扩展性瓶颈。正因如此，当问题规模稍大时，精确解在计算上变得不可行。这为我们项目的核心策略——即放弃对通用精确解的幻想，转而研究在特定规模下，使用AI代理模型来高效逼近最优解——提供了坚实的理论依据。
 
 面对这种精确解存在但计算成本过高的困境，本文探索并验证了一种基于AI代理模型（Surrogate Models）的求解通用方法。其核心思想是：利用精确穷举算法在一个可计算的规模内生成高质量的训练样本，然后训练一个计算成本低廉的AI模型来学习其决策行为。
 
@@ -20,8 +20,7 @@
 2.设计并开发了一款完整的游戏项目，涵盖了从客户端到服务器端(服务器策略基于AI代理模型)的全栈实现
 
 
-
-- 相对于单纯的学术文章而言 本文也是一个完成度较高的项目报告，,在算法,AI,工程上都做了一些创新,并达到了一定深度
+相对于单纯的学术文章而言 本文也是一个高完成度项目的报告，,在算法,AI,工程上都做了一些创新,并达到了一定深度
 
 ## 项目亮点
 
@@ -29,7 +28,7 @@
 
 - **严谨的算法分析**
 
-- **问题的NP-hard性质证明**
+- **自定义问题的NP-complete性质证明**
 
 - **全面的ai模型评估体系**
 
@@ -54,7 +53,7 @@
 本部分将详细介绍游戏规则以及编程实现，包括：
 - **游戏规则**
 - **算法分析**：
-- **NP-Hard/NP-Complete的证明**
+- **NP-Complete的证明**
 - **算法优化讨论与AI代理模型的提出**：
 
 ### 2. AI 技术细节
@@ -139,22 +138,22 @@
 4.   A  会动态更新：
     *  A  移除   {3, 1, 2, 3 }  后，变为   {7, 4, 6 } 。
     *  B  没有改变，仍为   {4, 9 } 。
-5.  可插入位置随之改变：对于  A =  {7, 4, 6 } ，可插入位置变成 ① 7 ② 4 ③ 6 ④。
+5.  可插入位置随之改变：对于  A =  {7, 4, 6 } ，可插入位置变成 ① 7 ② 4 ③ 6 ④
 
 **第二次出牌**
 
-1.  玩家选择将牌 `9` 从  B  中取出，插入到  A  中的位置 ④。
+1.  玩家选择将牌 `9` 从  B  中取出，插入到  A  中的位置 ④
 2.   A, B  被更新：
     *  A  变为   {7, 4, 6, 9 } 。
     *  B  变为   {4 } 。
 3.  检查匹配：新插入的牌是 `9`。在   {7, 4, 6, 9 }  中，没有其他元素数值为 `9`。
 4.  没有匹配发生，所以得分2为 0。
 5.   A  和  B  保持当前状态。
-6.  可插入位置变成 ① 7 ② 4 ③ 6 ④ 9 ⑤。
+6.  可插入位置变成 ① 7 ② 4 ③ 6 ④ 9 ⑤
 
 **第三次出牌**
 
-1.  玩家选择将最后一张牌 `4` 从  B  中取出，插入到  A  中的位置 ⑤。
+1.  玩家选择将最后一张牌 `4` 从  B  中取出，插入到  A  中的位置 ⑤
 2.   A, B  被更新：
     *  A  变为   {7, 4, 6, 9, 4 } 。
     *  B  变为 `{}` (空)。
@@ -394,12 +393,8 @@ $$
 时间复杂度的通过这个思想也能得到更精确的估计,但由于改变的是数据的规模 , 所以依然是阶乘的时间复杂度
 
 
-穷举递归搜索（Recursive_StrategyAndScore）为了保证找到最优解而去尝试所有可能，时间复杂度是极高的。而strategy_TrueScore函数则可以快速验证任意一个给定策略的好坏。
 
-这个问题的等价版本是：
-```
-“给定A，B和一个分数S，是否存在一个策略，使得总得分不小于S？
-```
+穷举递归搜索（Recursive_StrategyAndScore）为了保证找到最优解而去尝试所有可能，时间复杂度是极高的。而strategy_TrueScore函数则可以快速验证任意一个给定策略的好坏。
 
 它是NP的 而且有可能是NP-hard的 
 
@@ -423,7 +418,7 @@ $$
     * **问题:** 是否存在一个出牌策略，使得最终总得分**恰好等于** `K`?
 
 3.  **子集和问题 (Subset Sum)**
-    这是一个经典的NP-complete问题 [^1]。
+    这是一个经典的NP-complete问题 [1]。
     * **实例:** 一个由 `n` 个互异正整数构成的集合 $S = \{s_1, s_2, ..., s_n\}$，以及一个目标整数 `T`。
     * **问题:** 是否存在 `S` 的一个子集 `S'` ⊆ `S`，使得 `S'` 中所有元素的和恰好等于 `T`？
 
@@ -496,7 +491,7 @@ $$
 
 4.  **推翻假设**: 因此，我们最初的假设——`CARD_GAME_OPT` 存在多项式时间解法——必然是错误的。
 
-**结论：卡牌游戏得分的泛化版本最大化问题是 NP-hard 的。**
+**结论2：卡牌游戏得分的泛化版本最大化问题是 NP-hard 的。**
 
 
 又根据之前的结论,strategy_TrueScore函数的步骤是
@@ -516,9 +511,13 @@ $$
 
 总的时间复杂度为 O(n log n ) + m *(O(n)+O(n)+O(n)) = O(n log n+O(mn))
 
-它是多项式时间复杂度的
+它是多项式时间复杂度的,所以得到
 
-所以这个问题是NP-Complete的
+**结论3:卡牌游戏得分的泛化版本最大化问题是NP的**
+
+根据结论2和结论3,
+
+**卡牌游戏得分的泛化版本最大化问题是NP-Complete的**
 
 
 
@@ -530,14 +529,14 @@ $$
 
 动态规划:
 
-A 的状态在每次插入后都会改变，并且列表内容本身复杂，而且导致了难以找到重叠子问题,难以作为 DP 状态的键进行存储和查找, A 的动态状态是问题所在。因此，动态规划 在这个问题的通用形式下很难实现。
+A 的状态在每次插入后都会改变，并且列表内容本身复杂，而且导致了难以找到重叠子问题,难以作为 DP 状态的键进行存储和查找, A 的动态状态是问题所在。因此，动态规划 在这个针对这个问题并不适用。
 
 
 
 
 剪枝/启发式方法:
 
-基于对于simulate_insertion_tool的匹配规则的理解,的确可以做出启发式方法优化,来跳过一些递归分支, 我使用future_score 这个特征来实现   具体内容在遗传算法的实现中展开
+基于对于simulate_insertion_tool的匹配规则的理解,在特定的规模,的确可以使用启发式方法优化,来跳过一些递归分支, 我定义了future_score 这个特征来实现   具体内容在遗传算法的实现中展开
 
 
 ***代理模型（surrogate modeling）***:
@@ -576,7 +575,7 @@ A 的状态在每次插入后都会改变，并且列表内容本身复杂，而
 
 #### 模型选择
 
-我选择了transformer和遗传算法作为ai模型 
+我选择了transformer[3]和遗传算法[4]作为ai模型 
 
 使用遗传算法的原因 其一是这个决策序列空间是巨大的，并且每一步的决策都依赖于上一步的结果。遗传算法是擅长在复杂、高维、非连续或目标函数难以微分的搜索空间中寻找最优解。  其二是它相对容易实现,而且它的计算成本低,可以快速得到结果。
 
@@ -715,7 +714,7 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 - 变异：添加高斯噪声，变异率自适应调整
 
 ##### 进化策略
-使用了 传统的遗传算法 和岛屿模型算法 这两种进化策略 
+使用了 传统的遗传算法 和岛屿模型算法[5] 这两种进化策略 
 
 - `island_model_evolution()`: 岛屿模型，将种群分割为独立岛屿，定期迁移优秀个体
 - 动态方法切换： 根据历史表现自适应选择进化方法
@@ -1711,7 +1710,7 @@ docker compose up
 
 Unity的编程范式与通用软件开发有显著区别。unity的C#脚本代码与unity本身的组件的深度耦合,要完整理解一段代码的功能，必须首先对unity引擎本身有一定的理解。
 
-我是基于unity社区框架[^2]开发的,其中在代码层面,最难的是 理清楚框架API的逻辑和复杂的继承关系 和 如何使用各种API与unity的组件结合编程,来达成我想要的功能,这很难通过文字描述,并与本文的内容主题有一定脱节.所以在这里我给出了我设计并实现的unity架构的C4 model 图片 来解释这个unity客户端,将我们的关注点放在软件架构上:
+我是基于unity社区框架[2]开发的,其中在代码层面,最难的是 理清楚框架API的逻辑和复杂的继承关系 和 如何使用各种API与unity的组件结合编程,来达成我想要的功能,这很难通过文字描述,并与本文的内容主题有一定脱节.所以在这里我给出了我设计并实现的unity架构的C4 model 图片 来解释这个unity客户端,将我们的关注点放在软件架构上:
 
 
 
@@ -1839,25 +1838,43 @@ $$
 
 ## 项目展望与结语
 
-思考文中讨论的范式的泛化可行性,之前提及的Transformer 的建模范式冲突的是不可忽视的问题,并且在更高的数据规模下,目前的Transformer与GA的特征可能都很难适配,比如future_score这一在当前特例的重要特征是基于A,B的长度都很小的情况定制的,它默认了B的长度<=3.
+思考文中讨论的范式的泛化可行性,之前提及的Transformer 的建模范式冲突的是不可忽视的问题,并且在更高的数据规模下,目前的Transformer与GA的特征可能都很难适配,比如future_score这一在当前特例的重要特征是基于A,B的长度都很小的情况定制的,它默认了B的长度<=3.此外,获取很高的数据规模的大量训练集可能很困难
 
 当A,B的长度很大时,如果沿用future_score,因为它只提供了length(B)<3后的得分前瞻,这部分前瞻性对整体得分的影响将会很小
 
 这说明要重新设计future_score,我觉得可以通过统计的结论,根据卡牌组合的规律去设计这个特征,提供对各种特殊情况的快速路径,该问题是NP-Complete的  但是并不代表不能用降低大量特例消耗的时间的方式,去降低平均复杂度.
 
-不过想要很好的利用ai代理模型这种启发式方法来处理一般化的NP问题,对硬件和知识的要求,非我目前可以完成的
+不过想要很好的利用ai代理模型这种启发式方法来处理一般化的NP问题,对硬件和知识的要求极高,非我目前可以完成的
 
 
 
 
 
-## 参考
+## 引用资料
 
 ---
-[^1]: M. R. Garey and D. S. Johnson, *Computers and Intractability: A Guide to the Theory of NP-Completeness*. W. H. Freeman, 1979.
-[^2](https://assetstore.unity.com/packages/tools/game-toolkits/cardhouse-264045) 
+[1]
+    M. R. Garey and D. S. Johnson, *Computers and Intractability: A Guide to the Theory of NP-Completeness*. W. H. Freeman, 1979.
 
-...
+[2]
+    [unity社区卡牌游戏框架](https://assetstore.unity.com/packages/tools/game-toolkits/cardhouse-264045) 
 
+[3] 
+    A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin. "Attention is All You Need." In *Advances in Neural Information Processing Systems* (NeurIPS), 2017.
+
+    Sutskever, I., Vinyals, O., & Le, Q. V. (2014). Sequence to sequence learning with neural networks. In Advances in neural information processing systems (NIPS 2014).
+
+    Bahdanau, D., Cho, K., & Bengio, Y. (2014). Neural machine translation by jointly learning to align and translate. arXiv preprint arXiv:1409.0473. (Published at ICLR 2015)
+
+[4]
+    Holland, J. H. (1975). Adaptation in natural and artificial systems: an introductory analysis with applications to biology, control, and artificial intelligence. University of Michigan Press.
+
+    Goldberg, D. E. (1989). Genetic algorithms in search, optimization, and machine learning. Addison-Wesley.
+
+    
+[5]
+    Tanese, R. (1989). Distributed genetic algorithms. In Proceedings of the 3rd International Conference on Genetic Algorithms (pp. 434-439).
+
+    Mühlenbein, H., Schomisch, M., & Born, J. (1991). The parallel genetic algorithm as function optimizer. Parallel Computing, 17(6-7), 619-632.
 
 由于项目涉及的技术广,工程量大 我使用了gemini,claude,chatgpt,Qwen等LLM模型进行必要的信息咨询以及部分代码的框架生成与优化

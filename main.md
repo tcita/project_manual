@@ -1680,30 +1680,44 @@ Transformer 架构本身是为处理有序序列而设计的，其核心组件�
 
 使用了专门为unity项目设计的 Unity Version Control (UVCS/ plastic scm) 作为版本控制工具
 
-我在windows系统的wsl2上安装了debian,使用它下载并配置docker,并使用debian进入windows目录,将编写的server项目使用docker容器化并打包成 server_image.tar后,编写compose.yaml
+为了方便移植镜像,将编写的server项目使用docker容器化并打包成 gameserver_v1.tar
 
-services:
-  server:
-    #镜像的逻辑名称
-    image: server-server:latest 
-    
-    #主机端口映射到容器的5000端口 
-    ports:
-      - "5000:5000"
+步骤说明:
+
+在windows系统中下安装docker desktop后
+
+完成项目的requirement.txt文件   
+
+用docker init创建dockerfile文件并作必要的修改
+
+编辑.dockerignore,忽略对于服务器项目不需要的文件
+
+在windows系统里的服务器项目根目录下:
+
+ 构建镜像:
+docker build -t gameserver:1.0 .
+
+ 导出镜像
+docker save -o ./gameserver_v1.tar gameserver:1.0
+
+
+
 
 基于打包好的镜像启动服务器的方式是:
 
-1.载入server_image.tar镜像(仅初始部署需要载入一次,镜像搭建后一般不需要再次载入)
+1.载入tar格式镜像(仅初始部署需要载入一次,镜像搭建后一般不需要再次载入)
 
 """
- docker load -i server_image.tar
+ docker load -i gameserver_v1.tar
 """
 
-2.在wsl2-debian中进入compose.yaml所在的目录,输入并运行命令
+2.依据镜像创建并启动容器
 """
-docker compose up 
+docker run -p 5000:5000 --name gameserver gameserver:1.0
 """
-启动服务器容器
+
+
+
 
 
 #### unity前端架构
@@ -1771,11 +1785,48 @@ Unity的编程范式与通用软件开发有显著区别。unity的C#脚本代�
 
 
 
-#### 游戏演示
-...
+#### 游戏实机演示
+
+![游戏实机演示1](1.png)
+
+我在wsl2上运行的debian 终端输入docker start gameserver来启动服务器 
 
 
+***
+![游戏实机演示2](2.png)
 
+在unity项目的开发界面开始游戏,画面中间的是场上的牌,共6张牌(卡牌游戏最优策略问题中的A)
+下方的3张牌是玩家的手牌(卡牌游戏最优策略问题中的B)
+(
+上方透明对话框的的文字是我调用Qwen* API在线生成的随机问候,我设定了几个初始人格:  
+{
+      "Absent-minded", "Graceful", "Impatient", "Emotionally fragile",
+      "Pessimistic", "Gentle", "Competitive", "Vain", "Shy", "Nervous"
+      ,"relaxed","anxious"
+  }  在本地随机选择一个(使用本地随机而不是让LLM随机的原因是,经过我测试,LLM有对积极人格选择的倾向),作为Prompt 之一,结合其他prompt让LLM生成一段话,向玩家问好,这次随机到的人格是Pessimistic
+
+>[Qwen]* 阿里巴巴开发的LLM 
+***
+![游戏实机演示3](3.png)
+
+首先是玩家回合 我打出3张牌 注意前两张没有造成匹配,而最后第最后一张点数与场上的牌的第一张点数相同,都是2 所以是将匹配所有卡牌并得分
+
+玩家分数将被更新为所有卡牌的点数之和
+>J,Q,K的点数被视为11,12,13
+***
+![游戏实机演示4](4.png)
+
+玩家分数被更新为52,玩家结束回合,进入电脑回合
+电脑手牌被初始化为[K,J,3](或[13,3,11]),场上的牌被初始化为[2,5,7,4,K,8](或[2,5,7,4,13,8])
+>这里电脑手牌的排序方式[K,J,3],根据的是电脑收到牌的先后顺序
+
+,电脑将手牌中的K插入场上的牌的最前面.匹配得分,并被消除,场上的牌变为[8],电脑得分44
+***
+![游戏实机演示5](5.png)
+已经无法得分,但是电脑依据策略将牌插入场上剩余的牌中的最前面
+***
+![游戏实机演示6](6.png)
+打开服务器日志,可以观察到电脑的实际出牌策略与服务器收发的数据一致(日志高亮部分的上方输出是服务器初始化时固定的通讯检查)
 
 ### 附录:
 特殊的树结构:
@@ -1847,6 +1898,9 @@ $$
 不过想要很好的利用ai代理模型这种启发式方法来处理一般化的NP问题,对硬件和知识的要求极高,非我目前可以完成的
 
 
+这是我的AI服务器端github项目链接:...
+
+由于unity版本控制系统是邀请制的私有系统,所以我无法直接公开它,像github一样让所有人都可以访问我的unity 客户端项目源文件.它的架构与实机演示截图已经在正文部分中详细描述.
 
 
 
@@ -1876,5 +1930,9 @@ $$
     Tanese, R. (1989). Distributed genetic algorithms. In Proceedings of the 3rd International Conference on Genetic Algorithms (pp. 434-439).
 
     Mühlenbein, H., Schomisch, M., & Born, J. (1991). The parallel genetic algorithm as function optimizer. Parallel Computing, 17(6-7), 619-632.
+
+    
+
+
 
 由于项目涉及的技术广,工程量大 我使用了gemini,claude,chatgpt,Qwen等LLM模型进行必要的信息咨询以及部分代码的框架生成与优化

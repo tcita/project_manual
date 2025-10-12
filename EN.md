@@ -1,6 +1,15 @@
-<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-<script type="text/x-mathjax-config">
-    MathJax.Hub.Config({ tex2jax: {inlineMath: [['\[', '\]']]}, messageStyle: "none" });
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
 </script>
 
 # What Happens When You Turn a Card Game into an NP-Complete Problem? (A Personal Exploration )
@@ -203,9 +212,9 @@ First, we perform a generalized mathematical analysis of the problem:
 ### Verification Complexity Analysis:  
 This computes the time complexity required to determine the outcome—according to the game rules—given arrays A and B and a specified insertion position(strategy).
 
-For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose \[|B| = n\] and \[|A| = m\]. In the first step, there are \[n\] choices for which element to insert, and for each such choice, there are \[m+1\] possible insertion positions. Thus, there are \[n \cdot (m+1)\] possible paths at the first level.
+For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose $|B| = n$ and $|A| = m$. In the first step, there are $n$ choices for which element to insert, and for each such choice, there are $m+1$ possible insertion positions. Thus, there are $n \cdot (m+1)$ possible paths at the first level.
 
-After inserting an element at an arbitrary position, let \[p\] denote the probability that a match occurs.
+After inserting an element at an arbitrary position, let $p$ denote the probability that a match occurs.
 
 ---
 
@@ -214,34 +223,34 @@ After inserting an element at an arbitrary position, let \[p\] denote the probab
 We now analyze the expected length of the subsequence removed when a match occurs.
 
 Consider the following simplified scenario:  
-We have a sequence **A** of \[m\] distinct integers. A value \[x \in A\] already exists in **A**. Now we insert another copy of \[x\] into a uniformly random position among the \[m+1\] possible insertion slots, forming a new sequence **A′**. This creates a contiguous subsequence \[[x \ldots x]\], which is then removed. What is the expected length of this removed subsequence?
+We have a sequence **A** of $m$ distinct integers. A value $x \in A$ already exists in **A**. Now we insert another copy of $x$ into a uniformly random position among the $m+1$ possible insertion slots, forming a new sequence **A′**. This creates a contiguous subsequence $[x \ldots x]$, which is then removed. What is the expected length of this removed subsequence?
 
 This can be further reduced to a purely combinatorial problem:
 
-> From the integers \[1, 2, \ldots, m+1\], select two distinct numbers uniformly at random. What is the expected number of integers between them, inclusive?
+> From the integers $1, 2, \ldots, m+1$, select two distinct numbers uniformly at random. What is the expected number of integers between them, inclusive?
 
-Let the two selected positions be \[i\] and \[j\] with \[i < j\]. The distance (inclusive length) is \[d = j - i + 1\], where \[2 \leq d \leq m+1\].
+Let the two selected positions be $i$ and $j$ with $i < j$. The distance (inclusive length) is $d = j - i + 1$, where $2 \leq d \leq m+1$.
 
 The expected value is:
 
-\[
+$
 \mathbb{E}[d] = \frac{\displaystyle \sum_{d=2}^{m+1} d \cdot (m - d + 2)}{\binom{m+1}{2}}
 = \frac{(m+2)\sum_{d=2}^{m+1} d - \sum_{d=2}^{m+1} d^2}{\binom{m+1}{2}}
-\]
+$
 
 Applying the formulas for the sum of an arithmetic series and the sum of squares, and simplifying, we obtain:
 
-\[
+$
 \mathbb{E}[d] = \frac{m + 5}{3}
-\]
+$
 
-Therefore, **the expected length of the removed subsequence upon a successful match is \[\frac{|A| + 5}{3}\]**.
+Therefore, **the expected length of the removed subsequence upon a successful match is $\frac{|A| + 5}{3}$**.
 
-Consequently, if the current length of **A** is \[|A|\], then after a match, the expected new length \[|A'|\] is:
+Consequently, if the current length of **A** is $|A|$, then after a match, the expected new length $|A'|$ is:
 
-\[
+$
 \mathbb{E}[|A'|] = |A| + 1 - \frac{|A| + 5}{3} = \frac{2|A| - 2}{3}
-\]
+$
 
 ---
 
@@ -249,50 +258,50 @@ Consequently, if the current length of **A** is \[|A|\], then after a match, the
 
 Now consider the matching probability dynamics.
 
-We have a sequence **A** of length \[m\] with all distinct elements. We insert an element \[b\] (from **B**, which may contain duplicates) into a random position in **A**. With probability \[p\], a match occurs; otherwise (with probability \[1-p\]), nothing is removed.
+We have a sequence **A** of length $m$ with all distinct elements. We insert an element $b$ (from **B**, which may contain duplicates) into a random position in **A**. With probability $p$, a match occurs; otherwise (with probability $1-p$), nothing is removed.
 
 Let:
-- \[E[K]\]: expected number of elements in **A** that can match any element in the remaining **B**.
-- \[E[K']\]: expected number of such matchable elements in **A** after a successful match.
+- $E[K]$: expected number of elements in **A** that can match any element in the remaining **B**.
+- $E[K']$: expected number of such matchable elements in **A** after a successful match.
 
 Due to the linearity of expectation and the earlier result on sequence length reduction, after a match:
 
-\[
+$
 E[K'] \approx \frac{2E[K] - 2}{3}
-\]
+$
 
 Meanwhile, the size of **B** decreases by 1.
 
 The matching probability at any step is approximately:
 
-\[
+$
 p = \frac{\text{number of matchable elements in } A}{\text{size of remaining } B}
-\]
+$
 
 Thus, after a successful match:
-- Numerator (matchable count) shrinks roughly by a factor of \[2/3\],
+- Numerator (matchable count) shrinks roughly by a factor of $2/3$,
 - Denominator (size of **B**) decreases by 1.
 
-Assuming large values (\[x = E[K] \gg 1\], \[y = |B| \gg 1\]), we observe:
+Assuming large values ($x = E[K] \gg 1$, $y = |B| \gg 1$), we observe:
 
-\[
+$
 \frac{x}{y} > \frac{(2x - 2)/3}{y - 1} \approx \frac{2x}{3(y - 1)} \approx \frac{2}{3} \cdot \frac{x}{y}
-\]
+$
 
-Hence, **the matching probability \[p\] decreases after a successful match**.
+Hence, **the matching probability $p$ decreases after a successful match**.
 
 Conversely, if no match occurs:
 - **A** grows by 1 (since the new element is added without removal),
 - The new element may itself become a future match target, so the number of matchable elements **increases or stays the same**,
 - **B** still shrinks by 1.
 
-Therefore, **\[p\] increases significantly after a failed match**.
+Therefore, **$p$ increases significantly after a failed match**.
 
 This leads to a key insight:
 
 > The system exhibits a **negative feedback loop**:  
-> - If a match occurs → \[p\] decreases;  
-> - If no match occurs → \[p\] increases.  
+> - If a match occurs → $p$ decreases;  
+> - If no match occurs → $p$ increases.  
 
 This behavior aligns with intuition and stabilizes the system.
 
@@ -300,93 +309,93 @@ This behavior aligns with intuition and stabilizes the system.
 
 ### State Evolution Model
 
-Define \[M_t\] as the length of **A** at the beginning of step \[t\]. The system evolves as:
+Define $M_t$ as the length of **A** at the beginning of step $t$. The system evolves as:
 
-- With probability \[p_t\] (match succeeds):
-  \[
+- With probability $p_t$ (match succeeds):
+  $
   M_{t+1} = \frac{2M_t - 2}{3}
-  \]
-- With probability \[1 - p_t\] (no match):
-  \[
+  $
+- With probability $1 - p_t$ (no match):
+  $
   M_{t+1} = M_t + 1
-  \]
+  $
 
-Here, \[p_t\] depends on the overlap between the current **A** and the remaining **B**.
+Here, $p_t$ depends on the overlap between the current **A** and the remaining **B**.
 
 > Due to the negative feedback described above, the system self-regulates:  
-> - Elimination reduces \[M\] → lowers future \[p_t\];  
-> - No elimination increases \[M\] → raises future \[p_t\].  
+> - Elimination reduces $M$ → lowers future $p_t$;  
+> - No elimination increases $M$ → raises future $p_t$.  
 
-Thus, \[M_t\] neither explodes nor collapses to zero, but fluctuates around a **dynamic equilibrium**.
+Thus, $M_t$ neither explodes nor collapses to zero, but fluctuates around a **dynamic equilibrium**.
 
 ---
 
 ### Steady-State Analysis
 
-Assume the system reaches a steady state where the expected length remains constant: \[\mathbb{E}[M_t] \approx M\] for all \[t\]. Approximate \[p_t \approx p\] as a constant depending only on \[M\] and the current size of **B** (denoted \[y\]).
+Assume the system reaches a steady state where the expected length remains constant: $\mathbb{E}[M_t] \approx M$ for all $t$. Approximate $p_t \approx p$ as a constant depending only on $M$ and the current size of **B** (denoted $y$).
 
 Then:
 
-\[
+$
 M = p \cdot \frac{2M - 2}{3} + (1 - p)(M + 1)
-\]
+$
 
-Solving for \[M\]:
+Solving for $M$:
 
-\[
+$
 M = \frac{3}{p} - 5
-\]
+$
 
 ---
 
 ### Estimating the Equilibrium Length
 
-To estimate \[p\] and locate the balance point, we adopt a **mean-field approximation**:
+To estimate $p$ and locate the balance point, we adopt a **mean-field approximation**:
 
 - Although **B** is a fixed input sequence, **A** evolves dynamically.
-- Both share the same alphabet (values 1 to \[K\]).
-- In expectation, the number of matchable elements between **A** and the remaining **B** is proportional to \[M\].
+- Both share the same alphabet (values 1 to $K$).
+- In expectation, the number of matchable elements between **A** and the remaining **B** is proportional to $M$.
 
 We make two key assumptions:
 
-1. **Mean-field approximation**: In the large-system limit, the instantaneous matching probability can be approximated by its expected value, and this probability is proportional to the current length \[ M \] of sequence A.
-2. **Quasi-static approximation**: Since \[y = |B|\] changes slowly (decreases by 1 per step), the system quickly equilibrates at each fixed \[y\].
+1. **Mean-field approximation**: In the large-system limit, the instantaneous matching probability can be approximated by its expected value, and this probability is proportional to the current length $ M $ of sequence A.
+2. **Quasi-static approximation**: Since $y = |B|$ changes slowly (decreases by 1 per step), the system quickly equilibrates at each fixed $y$.
 
 Thus:
 
-\[
+$
 p_t \approx c \cdot \frac{M_t}{y} \quad \text{(for some constant } c\text{)}
-\]
+$
 
-In equilibrium, \[M \approx 3/p - 5 \approx 3/p\] (ignoring the constant for scaling analysis). Substituting \[p \approx M / y\]:
+In equilibrium, $M \approx 3/p - 5 \approx 3/p$ (ignoring the constant for scaling analysis). Substituting $p \approx M / y$:
 
-\[
+$
 M \approx \frac{3}{p} \approx \frac{3y}{M} \quad \Rightarrow \quad M^2 \approx 3y
-\]
+$
 
-Therefore, for most of the process (when \[y = \Theta(n)\]):
+Therefore, for most of the process (when $y = \Theta(n)$):
 
-\[
+$
 M_t = \Theta(\sqrt{n})
-\]
+$
 
 This implies that the typical length of the dynamic sequence **A** scales with the square root of the initial size of **B**.
 
 
 
-Since \[ M_t = \Theta(\sqrt{n}) \] holds in typical cases, the total time complexity is:
-\[
+Since $ M_t = \Theta(\sqrt{n}) $ holds in typical cases, the total time complexity is:
+$
 T = \sum_{t=1}^{n} O(M_t) \approx \sum_{t=1}^{n} O(\sqrt{n}) = O(n \cdot \sqrt{n}) = O(n^{3/2}).
-\]
+$
 
-More precisely, if we treat \[ M_t \approx \sqrt{n - t} \] as a continuous function, then:
-\[
+More precisely, if we treat $ M_t \approx \sqrt{n - t} $ as a continuous function, then:
+$
 T \approx \int_0^n \sqrt{t} \, dt = \frac{2}{3} n^{3/2} = \Theta(n^{3/2}).
-\]
+$
 
-This model is primarily intended for analyzing the macroscopic statistical behavior of the system when \[ M \gg 1 \]. We assume that the probability of the system being completely emptied [i.e., \[ M = 0 \] or \[ M = 1 \]] during execution is negligible. The validity of this assumption stems from the fact that the equilibrium point established by the negative feedback mechanism, \[ M_{\text{eq}} \approx \sqrt{3y/c} \], decreases slowly as \[ y \] diminishes, yet remains far from zero as long as \[ y \] is still relatively large. Consequently, the system spends the vast majority of its time in states where \[ M \] is sufficiently large. 
+This model is primarily intended for analyzing the macroscopic statistical behavior of the system when $ M \gg 1 $. We assume that the probability of the system being completely emptied [i.e., $ M = 0 $ or $ M = 1 $] during execution is negligible. The validity of this assumption stems from the fact that the equilibrium point established by the negative feedback mechanism, $ M_{\text{eq}} \approx \sqrt{3y/c} $, decreases slowly as $ y $ diminishes, yet remains far from zero as long as $ y $ is still relatively large. Consequently, the system spends the vast majority of its time in states where $ M $ is sufficiently large. 
 
-Our analysis characterizes the system's behavior in this steady-state regime and does not precisely capture the dynamics near absorbing or reflecting boundaries at very small values of \[ M \]—for example, if all elements of \[ A \] are completely eliminated after being matched by a subset of \[ B \], then subsequent insertions of \[ B \] would cause elements from \[ B \] to match among themselves.
+Our analysis characterizes the system's behavior in this steady-state regime and does not precisely capture the dynamics near absorbing or reflecting boundaries at very small values of $ M $—for example, if all elements of $ A $ are completely eliminated after being matched by a subset of $ B $, then subsequent insertions of $ B $ would cause elements from $ B $ to match among themselves.
 
 
 
@@ -442,26 +451,26 @@ We compute the total number of possible final static configurations when inserti
 Consider the scenario where we insert all elements of B (an array of length 3) into A (an array of length 6), ignoring the actual numeric values (i.e., treating cards only as belonging to group A or group B). This becomes a multiset permutation problem: how many distinct length-9 arrays can be formed by arranging the multiset {A, A, A, A, A, A, B, B, B}?
 
 The answer is:
-\[
+$
 \binom{9}{6} \cdot \binom{3}{3} = \binom{9}{6} = \binom{9}{3}
-\]
+$
 
 Now, we assign actual numeric values (from 1 to 13) to these placeholders:
 
-- Each of the 6 A-cards must have **distinct** values from 1 to 13, so the number of ways to assign values to A is the number of permutations: \[ P(13,6) = \frac{13!}{(13-6)!} \].
-- Each of the 3 B-cards can take **any** value from 1 to 13, with repetitions allowed, giving \[ 13^3 \] possible assignments.
+- Each of the 6 A-cards must have **distinct** values from 1 to 13, so the number of ways to assign values to A is the number of permutations: $ P(13,6) = \frac{13!}{(13-6)!} $.
+- Each of the 3 B-cards can take **any** value from 1 to 13, with repetitions allowed, giving $ 13^3 $ possible assignments.
 
 Therefore, the total number of possible final configurations (under the no-matching assumption) is:
-\[
+$
 \binom{9}{3} \cdot \frac{13!}{(13-6)!} \cdot 13^3 = 228{,}012{,}744{,}960
-\]
+$
 
 Assuming each sample requires approximately 10 bytes of storage, the total data size would exceed **2,000 GB**—an enormous amount.
 
 > **Important Caveats**:  
 > This is only a rough estimate. As noted earlier, in the actual game, each insertion may trigger matching and removal, dynamically altering the length and content of A. Consequently, the state of A changes after each insertion, meaning that the order of insertions matters significantly.  
 >
-> For example, inserting \[ b_1 \] at position 1 followed by \[ b_2 \] at position 2 can yield a different outcome than inserting \[ b_2 \] at position 2 first and then \[ b_1 \] at position 1—due to intermediate matching effects. Thus, these are two distinct decision paths.  
+> For example, inserting $ b_1 $ at position 1 followed by $ b_2 $ at position 2 can yield a different outcome than inserting $ b_2 $ at position 2 first and then $ b_1 $ at position 1—due to intermediate matching effects. Thus, these are two distinct decision paths.  
 >
 > Moreover, our calculation assumes **no matches occur**, which also implies that some insertion sequences might be invalid in practice (e.g., attempting to insert at a position beyond the current length of A). Matching not only changes A’s length but also introduces complex state dependencies. It remains unclear whether matching ultimately increases or decreases the total number of feasible decision paths—but it certainly makes the true search space highly non-trivial and far more intricate than this static upper bound suggests.
 
@@ -529,24 +538,21 @@ This entire procedure was repeated **20 million times** (`total_times = 20,000,0
 
 The number of insertion positions available at each step depends on the current length of A:
 - First insertion: `length(A) + 1 = 6 + 1 = 7` possible positions.
-- Second insertion: on average `E[length(A1)] + 1 ≈ 4.8603 + 1 ≈ 5.86` positions.
-- Third insertion: on average `E[length(A2)] + 1 ≈ 4.1555 + 1 ≈ 5.16` positions.
+- Second insertion: on average `E[length(A1)] + 1 ` positions.
+- Third insertion: on average `E[length(A2)] + 1 ` positions.
 
 Thus, the estimated **total number of decision paths** (i.e., sequences of insertion choices) is approximately:
 
-\[
-\left( (\text{length}(A) + 1) \cdot (E[\text{length}(A_1)] + 1) \cdot (E[\text{length}(A_2)] + 1) \right) \cdot P(13, 6) \cdot 13^3
-\]
+$$
+\left( ( \text{length}(A) + 1 ) \cdot \left( E[\text{length}(A_1)] + 1 \right) \cdot \left( E[\text{length}(A_2)] + 1 \right) \right) \cdot P(13, 6) \cdot 13^3
+$$
 
-Plugging in the values:
-\[
-(7 \times 5.86 \times 5.16) \approx 211.5
-\]
+Plugging in the values: (7 * 5.86 * 5.16) ≈  211.5
 
-Compare this to the static no-matching case, which had \[\binom{9}{3} = 84\] final arrangements. The ratio is:
-\[
-\frac{211.5}{84} \approx 2.5
-\]
+
+Compare this to the static no-matching case, which had $\binom{9}{3} = 84$ final arrangements. The ratio is:
+211.5/84 ≈ 2.5
+
 
 This means the **number of decision paths is roughly 2.5 times larger** than the number of "final static combinations" under the no-matching assumption.
 
@@ -561,201 +567,252 @@ The problem is in NP and is likely NP-hard.
 
 This resembles the Travelling Salesman Problem (TSP), where the decision to visit a particular city directly affects the distances and path choices for subsequent cities. Similarly, in our problem, a single "matching" operation fundamentally alters the "map" (i.e., list A), thereby influencing the scores (i.e., optimal card-playing decisions) of all subsequent "paths." This structural similarity strongly suggests that our problem is NP-hard. We formally prove this using a Turing reduction.
 
----
+## Proof of NP-hardness
 
-### Proof of NP-hardness
+Proof: The Card Game Optimization Problem (CARD_GAME_OPT) is NP-hard
 
-**Claim:** The Card Game Optimization Problem (CARD_GAME_OPT) is NP-hard.
-
-In this proof, we follow standard conventions from theoretical computer science. The input size of a problem instance is defined as the total number of bits required for its **standard binary representation**. Consequently, the input size of an integer \[N\] is \[O(\log N)\]. Algorithmic time complexity is measured relative to this input size.
+In this proof, we follow standard theoretical computer science conventions. The input size of a problem instance is defined as the total number of bits required for its **standard binary representation**. Therefore, the input size of a numerical value N is O(log N). The time complexity of algorithms will be measured based on this input size.
 
 #### **1. Proof Strategy**
 
-To prove that the optimization problem `CARD_GAME_OPT` is NP-hard, we employ a **Turing reduction** from the well-known NP-complete problem **Subset Sum**.
+To prove that the optimization problem `CARD_GAME_OPT` is NP-hard, we employ a **Turing Reduction** from a known NP-complete problem—the **Subset Sum Problem**.
 
-The core logic follows a **proof by contradiction**:
-- First, assume that `CARD_GAME_OPT` is **not** NP-hard—i.e., there exists a polynomial-time algorithm that solves it.
-- Then, we demonstrate how to use this hypothetical algorithm as an oracle to construct **another** polynomial-time algorithm that solves the Subset Sum problem.
+The core logic of the proof follows a **proof by contradiction**:
+First, we assume that `CARD_GAME_OPT` is **not** NP-hard, meaning there exists a polynomial-time algorithm that can solve it. Then, we demonstrate how to use this hypothetical algorithm as an oracle to design **another** polynomial-time algorithm that solves the Subset Sum Problem.
 
-If this construction is valid, it would imply that an NP-complete problem can be solved in polynomial time, leading to the conclusion that P = NP—contradicting the widely accepted conjecture that P ≠ NP. Hence, our initial assumption must be false.
+If the above logic holds, it would mean that an NP-complete problem can be solved in polynomial time, leading to the conclusion that P=NP. This contradicts the fundamental assumption in computational complexity theory that P≠NP, thus our initial assumption must be false.
 
 #### **2. Problem Definitions**
 
 * **Subset Sum Problem**
-    * **Input**: A set \[S = \{s_1, s_2, \dots, s_n\}\] of \[n\] **distinct** positive integers and a target integer \[T\].
-    * **Question**: Does there exist a subset \[S' \subseteq S\] such that the sum of elements in \[S'\] equals exactly \[T\]?
-    * **Complexity**: This is a classic NP-complete problem [1]. We specifically consider the version with distinct integers to ensure the validity of our reduction.
+    * **Input**: A **set** `S = {s₁, s₂, ..., sₙ}` consisting of `n` **distinct** positive integers, and a target integer `T`.
+    * **Question**: Does there exist a subset `S' ⊆ S` such that the sum of all elements in `S'` equals exactly `T`?
+    * **Complexity**: This is a classic NP-complete problem[1]. We specifically refer to its formulation dealing with sets of distinct integers to ensure the validity of the reduction.
 
 * **Card Game Optimization Problem (CARD_GAME_OPT)**
-    * **Input**: Two card lists \[A\] and \[B\].
-    * **Goal**: Find a playing strategy that **maximizes** the total score, and return this maximum score.
+    * **Input**: Two card lists `A` and `B`.
+    * **Question**: Find a card-playing strategy that **maximizes** the total score obtained, and return this maximum score.
 
 #### **3. Reduction Proof**
 
 **Step 1: Contradiction Assumption**
 
-Assume there exists a polynomial-time algorithm for `CARD_GAME_OPT`, denoted as `Solve_OPT`. We treat this algorithm as an oracle \[O\] that, given inputs \[A\] and \[B\], returns the maximum achievable score \[O(A, B) = \text{max\_score}\] in polynomial time.
+Assume that `CARD_GAME_OPT` has a polynomial-time solution. We call this hypothetical algorithm `Solve_OPT`. We can view it as an oracle `O` that can compute `O(A, B) = max_score` in polynomial time.
 
-**Step 2: Constructing a Subset Sum Solver**
+**Step 2: Design a New Algorithm to Solve the Subset Sum Problem**
 
-We design a new algorithm, `SubsetSumSolver`, which takes an instance \[(S, T)\] of the Subset Sum problem as input and uses oracle \[O\] to determine whether a solution exists.
+We design a new algorithm called `SubsetSumSolver` that takes an instance `(S, T)` of the Subset Sum Problem as input. This algorithm determines whether a solution exists by calling the oracle `O`.
 
 **A. Oracle Capability Encapsulation**
 
-`SubsetSumSolver` must translate its mathematical query into a game instance understandable by oracle \[O\]. To this end, it implements a core helper function `MaxSubsetSum(S_sub)`.
+The `SubsetSumSolver` algorithm needs to "translate" the mathematical problem it wants to query into a game problem that the oracle `O` can understand. To this end, the algorithm internally implements a core function `MaxSubsetSum(S_sub)`.
 
-* **Function `MaxSubsetSum(S_sub)` Procedure**:
-    1. Accepts a subset \[S_{\text{sub}} \subseteq S\] as input.
-    2. Constructs a game instance \[I = (A = [X], B = [X] \cup S_{\text{sub}})\], where \[X\] is a sufficiently large integer satisfying \[X > \sum(S)\].
+* **Operation flow of function `MaxSubsetSum(S_sub)`:**
+    1. The function receives `S_sub` as a parameter, where `S_sub` ⊂ `S`.
+    2. Based on this parameter, the function programmatically constructs a game instance `I = (A=[X], B=[X] + S_sub)`.
+       Here, X is a pre-selected integer sufficiently large to be greater than Sum(S).
+
+     >*Construction method: For any S, we can obtain X by calculating the sum of all elements in S and adding 1, i.e., X = Sum(S) + 1.
+     >Then construct A=[X] and B=[X] + S_sub. This construction satisfies the rules of the card game and obviously holds for any S.
+
+    3. The function passes the constructed instance `I` to the oracle `O` and obtains the return value `max_score`.
+    4. The function computes and returns `max_score - 2X`.
+
+* **Function Capability Analysis:**
+    Since elements in `S` are distinct and X is extremely large, the only way to score is by matching two X cards. Therefore, since S_sub contains distinct elements, the result of `max_score - 2X` is exactly the maximum subset sum of the input set `S_sub` (i.e., the sum of all elements in `S_sub`). Since constructing the instance, calling oracle `O`, and performing subtraction are all polynomial-time operations, the `MaxSubsetSum` function itself is also polynomial-time.
+
+**B. Main Body of `SubsetSumSolver` Algorithm**
+
+This algorithm uses its internal function `MaxSubsetSum` to determine whether a subset with sum `T` exists.
+
+* **Algorithm execution flow `SubsetSumSolver(S, T)`:**
+    1. **Initial check**: If `T < 0` or `T > MaxSubsetSum(S)`, then a solution obviously does not exist, and the algorithm returns "No".
+    2. **Constructive solution**:
+        a. Initialize target sum `T_rem = T`.
+        b. Create a copy `S_rem` of `S` as the set of elements to be examined, sorted in descending order.
+        c. Iterate through each element `sᵢ` in `S`:
+            i. Remove `sᵢ` from `S_rem`.
+            ii. Determine whether `sᵢ` should be added to the final solution:
+                * If `sᵢ <= T_rem`,
+                and `T_rem - sᵢ <= MaxSubsetSum(S_rem)` (if sᵢ is added to the solution set, it means the remaining elements can potentially sum to the remaining target)
+                
+                This means if we select `sᵢ`, the remaining target sum `T_rem - sᵢ` **may possibly** be achieved by the remaining elements `S_rem`. The algorithm makes the decision to consider `sᵢ` as part of the solution and updates `T_rem = T_rem - sᵢ`.
+    3. **Return result**: After iterating through all elements, if `T_rem` equals exactly `0`, it means the algorithm successfully found a combination of elements `S_solution` whose sum is `T`. The algorithm returns "Yes". Otherwise, it returns "No".
+
+The total correctness of this algorithm includes:
+
+    A. Termination: The algorithm always halts in a finite number of steps.
+    B. Partial Correctness: The result after the algorithm halts is correct.
+        To prove partial correctness, we need to prove:
+            B1. Soundness: When the algorithm returns "Yes", the problem indeed has a solution.
+            B2. Completeness: When the problem has a solution, the algorithm will definitely return "Yes".
+
+Termination is obvious, as the algorithm terminates after traversing S.
+
+#### **Proof: Soundness**
+
+**Question**: If the `SubsetSumSolver` algorithm ends with T_rem = 0, why does this indicate that the algorithm successfully found a combination of elements `S_solution`?
+
+#### **1. Define Loop Invariant**
+
+Let us define an equation that always holds during the algorithm's loop process.
+
+Let `T_rem(k)` be the value of `T_rem` after the algorithm has examined the first `k` elements.
+Let `S_solution(k)` be the `S_solution` set after the algorithm has examined the first `k` elements.
+
+The **loop invariant** we want to prove is:
+$$T_{\text{rem}}(k) + \sum_{s \in S_{\text{solution}}(k)} s = T$$
+
+The behavior of T_rem is to be initialized to T, then continuously subtract potentially viable sᵢ, which is T minus the sum of elements already selected into the solution set.
+
+This equation shows that after each step of the loop, **the total target T minus the sum of elements already selected** plus **the sum of elements already selected**, always equals **the original total target `T`**. The equation itself is obviously true.
+
+#### **2. Proof by Mathematical Induction**
+
+We will prove by mathematical induction that this invariant holds throughout the algorithm's execution.
+
+* **Base Case (equivalent to the simplest case of a recurrence relation): `k = 0`**
+    Before the loop begins (i.e., when 0 elements have been examined):
+    * `S_solution(0)` is the empty set `[]`, so its element sum `Sum(S_solution(0)) = 0`.
+    * `T_rem(0)` is initialized to `T`.
+    * At this point, the invariant equation is: `T_rem(0) + Sum(S_solution(0)) = T + 0 = T`.
+    * **Conclusion**: Before the loop begins, the invariant holds.
+
+* **Inductive Step**
+    **Assume** that after examining the `(k-1)`-th element, the invariant holds. That is:
+    $$T_{\text{rem}}(k-1) + \sum_{s \in S_{\text{solution}}(k-1)} s = T$$
+    Now, we analyze the two cases when the algorithm examines the `k`-th element `sₖ`:
+
+    * **Case 1: After adding `sₖ` to the solution set `S_solution`**
+        According to the algorithm's decision logic, this will happen. At this point, the state is updated as follows:
+        * `S_solution(k)` = `S_solution(k-1) ∪ {sₖ}`, therefore `Sum(S_solution(k)) = Sum(S_solution(k-1)) + sₖ`.
+        * `T_rem(k)` = `T_rem(k-1) - sₖ`.
+
+        We substitute the new state into the left side of the invariant equation:
+        `T_rem(k) + Sum(S_solution(k))`
+        `= (T_rem(k-1) - sₖ) + (Sum(S_solution(k-1)) + sₖ)`
+        `= T_rem(k-1) + Sum(S_solution(k-1))`
+        According to our inductive hypothesis, the result of the above expression equals `T`.
+        **Therefore, in this case, the invariant still holds after the `k`-th step.**
+
+    * **Case 2: `sₖ` is not added to the solution set `S_solution`**
+        In this case, the state is updated as follows:
+        * `S_solution(k)` = `S_solution(k-1)`, therefore `Sum(S_solution(k)) = Sum(S_solution(k-1))`.
+        * `T_rem(k)` = `T_rem(k-1)`.
+
+        We substitute the new state into the left side of the invariant equation:
+        `T_rem(k) + Sum(S_solution(k))`
+        `= T_rem(k-1) + Sum(S_solution(k-1))`
+        According to our inductive hypothesis, the result of the above expression equals `T`.
+        **Therefore, in this case, the invariant also still holds after the `k`-th step.**
+
+* **Conclusion**
+    Through mathematical induction, we have proven that this loop invariant `T_rem(k) + Sum(S_solution(k)) = T` always remains valid after each iteration of the algorithm.
+
+#### **3. Corollary**
+
+When the algorithm finishes traversing all `n` elements and terminates, this invariant still holds. Let `T_rem_final` and `S_solution_final` be the final state. We have:
+$$T_{\text{rem\_final}} + \sum_{s \in S_{\text{solution\_final}}} s = T$$
+At this point, the algorithm's return logic is to check whether `T_rem_final` equals `0`. If `T_rem_final = 0`, we can substitute it into the above proven equation:
+$$0 + \sum_{s \in S_{\text{solution\_final}}} s = T$$
+$$\sum_{s \in S_{\text{solution\_final}}} s = T$$
+**Proof complete.** This shows that if and only if `T_rem` is 0 when the algorithm terminates, the sum of elements in our constructed solution set `S_solution` precisely equals the original target `T`.
+
+Therefore, if T_rem becomes 0 when the algorithm ends, we can confirm that Sum(S_solution) must equal T.
+
+#### **Proof: Completeness**
+
+**Question**: If the problem truly has a solution, why must T_rem necessarily equal 0 when the algorithm ends (after the loop ends, can the invariant deduce the algorithm's correct result)?
+
+**Proposition to prove**: For any Subset Sum Problem instance `(S, T)` that does have a solution, the `SubsetSumSolver` algorithm described in the report guarantees it will terminate and return "Yes" (i.e., final `T_rem = 0`).
+
+**Proof by contradiction**:
+
+1. **Make contradiction assumption**
+    Assume the proposition to be proved is false. That is, **there exists** an optimal solution `S*` (whose sum of all elements is `T`), but the `SubsetSumSolver` algorithm **fails** after execution, ultimately returning "No" (i.e., `T_rem > 0` when the algorithm terminates).
+
+2. **Analyze the inevitable cause of failure**
+    If the algorithm's final result is incorrect, then during its execution of traversing elements in descending order, it must have made at least one "wrong" decision. We can pinpoint the moment when the algorithm makes its **first** mistake. This error must be:
+    * The algorithm **did not select** an element that should belong to the optimal solution `S*`. We call this incorrectly "skipped" element `s*`.
+
+    Before considering `s*`, all elements larger than `s*` have been correctly processed.
+
+3. **Analyze the conditions for the algorithm's wrong decision**
+    According to the decision logic of `SubsetSumSolver`, the algorithm "skips" `s*` because it fails to satisfy the `if` condition. This condition is `sᵢ <= T_rem` and `T_rem - sᵢ <= MaxSubsetSum(S_rem)`.
+
+    Analyze why this condition does not hold for `s*`:
+    * **For `s* <= T_rem`**: When processing `s*`, the value of `T_rem` equals `T` minus the sum of all selected members of `S*` that are larger than `s*` (guaranteed by S in descending order).
     
-        > *Construction example*: For any set \[S\], we can compute \[X = \sum(S) + 1\]. This ensures \[X\] exceeds the total sum of all elements in \[S\]. The resulting lists \[A = [X]\] and \[B = [X] \cup S_{\text{sub}}\] are valid inputs for the card game and work for any \[S\].
+    Therefore, the value of `T_rem` equals exactly `s*` plus the sum of all members of `S*` that are smaller than `s*`.
+    
+    That is:
+    
+    $$T_{\text{rem}} - s^* = \sum_{x \in S^*, x < s^*} x$$
+    
+    Therefore, `T_rem >= s*` must hold.
 
-    3. Queries oracle \[O\] with instance \[I\] to obtain \[\text{max\_score}\].
-    4. Returns \[\text{max\_score} - 2X\].
+    * **Thus, the only reason for decision failure** can only be that the algorithm determined at that moment:
+        $$T_{\text{rem}} - s^* > \text{MaxSubsetSum}(S_{\text{rem}})$$
 
-* **Capability Analysis**:
-    Because all elements in \[S\] are distinct and \[X\] is sufficiently large, the only way to achieve a high score is by matching the two \[X\] cards. Consequently, \[\text{max\_score} - 2X\] equals the sum of all elements in \[S_{\text{sub}}\]. Since instance construction, oracle query, and subtraction are all polynomial-time operations, `MaxSubsetSum` runs in polynomial time.
+4. **Derive contradiction**
+    Let's analyze both sides of this inequality:
+    * **Left side of inequality `T_rem - s*`**: According to the above analysis, this value equals **the sum of all elements in the optimal solution `S*` that are smaller than `s*`**.
+    * **Right side of inequality `MaxSubsetSum(S_rem)`**: This value is the maximum subset sum that can be formed by the set of elements `S_rem` currently "to be examined" by the algorithm.
+    * Those elements in the optimal solution `S*` that are smaller than `s*` must necessarily be a subset of the `S_rem` set. Therefore, the maximum subset sum that can be formed from `S_rem` must be greater than or equal to the sum of any of its subsets. Thus, logically it must hold that:
+    
+        $$\text{MaxSubsetSum}(S_{\text{rem}}) \geq \sum_{x \in S^*, x < s^*} x$$
 
-**B. Main Algorithm: `SubsetSumSolver(S, T)`**
+        Using the equation obtained earlier, this is also:
 
-This algorithm uses `MaxSubsetSum` to determine whether a subset of \[S\] sums to \[T\].
+        $$\text{MaxSubsetSum}(S_{\text{rem}}) \geq T_{\text{rem}} - s^*$$
+    At this point, a contradiction appears:
+    * Our **assumption** (algorithm failure) led to the conclusion: `T_rem - s* > MaxSubsetSum(S_rem)`.
+    * The **logical deduction** yields the inevitable conclusion: `T_rem - s* <= MaxSubsetSum(S_rem)`.
 
-* **Execution Flow**:
-    1. **Initial Check**: If \[T < 0\] or \[T > \text{MaxSubsetSum}(S)\], return “NO”.
-    2. **Constructive Search**:
-        a. Initialize remaining target \[T_{\text{rem}} = T\].
-        b. Create a working copy \[S_{\text{rem}} = S\], sorted in descending order.
-        c. Iterate through each element \[s_i\] in \[S\]:
-            i. Remove \[s_i\] from \[S_{\text{rem}}\].
-            ii. Decide whether to include \[s_i\] in the solution:
-                - If \[s_i \leq T_{\text{rem}}\] **and** \[T_{\text{rem}} - s_i \leq \text{MaxSubsetSum}(S_{\text{rem}})\],  
-                  then include \[s_i\] in the solution and update \[T_{\text{rem}} \leftarrow T_{\text{rem}} - s_i\].
-    3. **Return Result**: After processing all elements, if \[T_{\text{rem}} = 0\], return “YES”; otherwise, return “NO”.
+    The same expression cannot simultaneously be both greater than and less than or equal to another expression. A mathematical contradiction arises.
 
-The **total correctness** of this algorithm requires:
-- **Termination**: The algorithm halts after finitely many steps (trivially true, as it iterates over \[n\] elements).
-- **Partial Correctness**:
-    - **Soundness**: If the algorithm returns “YES”, a valid solution exists.
-    - **Completeness**: If a solution exists, the algorithm returns “YES”.
+5. **Draw conclusion**
+    The source of the contradiction lies in our assumption in the first step. Therefore, the assumption that "a solution exists but the algorithm did not find it" is false.
 
----
+    Thus the proposition to be proved is true: For any Subset Sum Problem instance with a solution, the `SubsetSumSolver` algorithm guarantees to find the solution and terminate with `T_rem = 0`.
 
-#### **Proof of Soundness**
+This proof ensures that the decision logic of the `SubsetSumSolver` algorithm is sufficiently **complete** and will not miss any existing solution.
 
-**Claim**: If `SubsetSumSolver` terminates with \[T_{\text{rem}} = 0\], then the selected elements \[S_{\text{solution}}\] sum exactly to \[T\].
+Therefore, the `SubsetSumSolver` algorithm has **total correctness**.
 
-**1. Loop Invariant Definition**
+**Step 3: Complexity Analysis and Contradiction Derivation**
 
-Let \[T_{\text{rem}}(k)\] be the value of \[T_{\text{rem}}\] after processing the first \[k\] elements, and \[S_{\text{solution}}(k)\] be the selected subset at that point.
-
-We define the **loop invariant**:
-\[
-T_{\text{rem}}(k) + \sum_{s \in S_{\text{solution}}(k)} s = T
-\]
-
-This holds because \[T_{\text{rem}}\] starts at \[T\] and is decremented precisely by the values added to \[S_{\text{solution}}\].
-
-**2. Proof by Induction**
-
-- **Base Case (\[k = 0\])**:
-    - \[S_{\text{solution}}(0) = \emptyset\], so sum = 0.
-    - \[T_{\text{rem}}(0) = T\].
-    - Invariant: \[T + 0 = T\] → holds.
-
-- **Inductive Step**:
-    Assume invariant holds after \[k-1\] steps:
-    \[
-    T_{\text{rem}}(k-1) + \sum_{s \in S_{\text{solution}}(k-1)} s = T
-    \]
-    Consider processing element \[s_k\]:
-
-    - **Case 1**: \[s_k\] is added to solution.
-        - \[S_{\text{solution}}(k) = S_{\text{solution}}(k-1) \cup \{s_k\}\]
-        - \[T_{\text{rem}}(k) = T_{\text{rem}}(k-1) - s_k\]
-        - New sum: \[(T_{\text{rem}}(k-1) - s_k) + (\text{sum}_{k-1} + s_k) = T_{\text{rem}}(k-1) + \text{sum}_{k-1} = T\]
-
-    - **Case 2**: \[s_k\] is skipped.
-        - Both \[T_{\text{rem}}\] and \[S_{\text{solution}}\] remain unchanged.
-        - Invariant trivially preserved.
-
-Thus, the invariant holds for all \[k\].
-
-**3. Final Implication**
-
-At termination (\[k = n\]):
-\[
-T_{\text{rem,final}} + \sum_{s \in S_{\text{solution,final}}} s = T
-\]
-If \[T_{\text{rem,final}} = 0\], then \[\sum S_{\text{solution,final}} = T\].  
-✅ **Soundness proved.**
-
----
-
-#### **Proof of Completeness**
-
-**Claim**: If a solution exists, `SubsetSumSolver` will find it (i.e., terminate with \[T_{\text{rem}} = 0\]).
-
-**Proof by Contradiction**:
-
-1. **Assume the contrary**: There exists a valid solution \[S^* \subseteq S\] with \[\sum S^* = T\], but the algorithm returns “NO” (i.e., \[T_{\text{rem}} > 0\] at termination).
-
-2. **Identify the first error**: During the descending-order traversal, let \[s^*\] be the **first** element in \[S^*\] that the algorithm **incorrectly skips**.
-
-3. **Analyze the decision condition**:
-    The algorithm skips \[s^*\] only if:
-    \[
-    s^* > T_{\text{rem}} \quad \text{or} \quad T_{\text{rem}} - s^* > \text{MaxSubsetSum}(S_{\text{rem}})
-    \]
-    But:
-    - At the time of processing \[s^*\], all larger elements in \[S^*\] have already been selected (by descending order and correctness up to this point).
-    - Thus, \[T_{\text{rem}} = s^* + \sum_{x \in S^*, x < s^*} x\], so \[s^* \leq T_{\text{rem}}\].
-    - Therefore, the failure must be due to:
-      \[
-      T_{\text{rem}} - s^* > \text{MaxSubsetSum}(S_{\text{rem}})
-      \]
-
-4. **Derive contradiction**:
-    - Left side: \[T_{\text{rem}} - s^* = \sum_{x \in S^*, x < s^*} x\]
-    - Right side: \[\text{MaxSubsetSum}(S_{\text{rem}})\] is the maximum subset sum of \[S_{\text{rem}}\], which **includes** all elements of \[S^*\] smaller than \[s^*\].
-    - Hence:
-      \[
-      \text{MaxSubsetSum}(S_{\text{rem}}) \geq \sum_{x \in S^*, x < s^*} x = T_{\text{rem}} - s^*
-      \]
-    - This contradicts the assumed inequality \[T_{\text{rem}} - s^* > \text{MaxSubsetSum}(S_{\text{rem}})\].
-
-5. **Conclusion**: The assumption is false. If a solution exists, the algorithm finds it.  
-✅ **Completeness proved.**
-
-Thus, `SubsetSumSolver` is **totally correct**.
-
----
-
-**Step 3: Complexity Analysis and Contradiction**
-
-- **Time Complexity**: `SubsetSumSolver` makes \[n\] calls to `MaxSubsetSum`, each polynomial-time. Hence, the entire algorithm runs in polynomial time.
-- **Contradiction**: We have constructed a polynomial-time algorithm for the NP-complete Subset Sum problem ⇒ P = NP, contradicting the P ≠ NP conjecture.
+* **Complexity**: The `SubsetSumSolver` algorithm performs one traversal of the `n` elements in set `S`. In each loop iteration, it calls the polynomial-time `MaxSubsetSum` function once. Therefore, the running time of the entire `SubsetSumSolver` algorithm is polynomial.
+* **Contradiction**: We have designed a polynomial-time algorithm (`SubsetSumSolver`) that can accurately solve the NP-complete "Subset Sum Problem". This directly leads to the conclusion that P=NP, contradicting the fundamental assumption in computational complexity theory that P≠NP.
 
 **Step 4: Conclusion**
 
-The contradiction arises from our initial assumption that `CARD_GAME_OPT` is solvable in polynomial time. Therefore, this assumption is false.
+The source of the above contradiction lies in our assumption in the first step—that "`CARD_GAME_OPT` has a polynomial-time solution". Therefore, this assumption must be false.
 
-> **Thus, the Card Game Optimization Problem `CARD_GAME_OPT` is NP-hard.**
+**Thus, the Card Game Optimization Problem `CARD_GAME_OPT` is NP-hard.**
 
----
+**Conclusion 2: The generalized version of the card game score maximization problem is NP-hard.**
 
-**Conclusion 2**: The generalized version of the card game scoring maximization problem is NP-hard.
+Furthermore, according to previous conclusions, the steps of the strategy_TrueScore function are:
+Sort array B → Iterate through each element of B → Check if array A and the current B element match (have intersection) → Calculate the sum of the consecutive subsequence generated by the match
 
-Additionally, recall that the `strategy_TrueScore` function operates as follows:
-- Sort array \[B\]: \[O(n \log n)\]
-- For each element in \[B\]:
-    - Check if it matches any element in \[A\]: \[O(m)\]
-    - Compute score from the resulting contiguous subsequence: \[O(m)\]
-- Total time: \[O(n \log n) + n \cdot O(m) = O(n \log n + mn)\], which is polynomial.
+    Size of array A is m
+    Size of array B is n
 
-Therefore:
+Sorting time complexity is O(n log n)
 
-**Conclusion 3**: The generalized card game scoring maximization problem is in NP.
+Linear scan to check if A and B[i] satisfy the matching rule has time complexity O(n)
 
-Combining Conclusions 2 and 3:
+Calculate the sum of the consecutive subsequence generated by the match (score from playing this card) has time complexity O(n)
 
-> **The generalized card game scoring maximization problem is NP-Complete.**
+Accumulate the scores corresponding to all elements of B to get the total score has time complexity O(n)
+
+Total time complexity is O(n log n) + m*(O(n)+O(n)+O(n)) = O(n log n + mn)
+
+This is polynomial time complexity, so we obtain:
+
+**Conclusion 3: The generalized version of the card game score maximization problem is in NP**
+
+Based on Conclusions 2 and 3:
+
+**The generalized version of the card game score maximization problem is NP-Complete**

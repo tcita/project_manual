@@ -200,7 +200,8 @@ First, we perform a generalized mathematical analysis of the problem:
 
 ---
 
-### Time Complexity Analysis
+### Verification Complexity Analysis:  
+This computes the time complexity required to determine the outcome—according to the game rules—given arrays A and B and a specified insertion position(strategy).
 
 For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose \(|B| = n\) and \(|A| = m\). In the first step, there are \(n\) choices for which element to insert, and for each such choice, there are \(m+1\) possible insertion positions. Thus, there are \(n \cdot (m+1)\) possible paths at the first level.
 
@@ -371,14 +372,14 @@ M_t = \Theta(\sqrt{n})
 
 This implies that the typical length of the dynamic sequence **A** scales with the square root of the initial size of **B**.
 
-### Overall Time Complexity Estimation
+
 
 Since \[ M_t = \Theta(\sqrt{n}) \] holds in typical cases, the total time complexity is:
 \[
 T = \sum_{t=1}^{n} O(M_t) \approx \sum_{t=1}^{n} O(\sqrt{n}) = O(n \cdot \sqrt{n}) = O(n^{3/2}).
 \]
 
-More precisely, if we treat \( M_t \approx \sqrt{n - t} \) as a continuous function, then:
+More precisely, if we treat \[ M_t \approx \sqrt{n - t} \] as a continuous function, then:
 \[
 T \approx \int_0^n \sqrt{t} \, dt = \frac{2}{3} n^{3/2} = \Theta(n^{3/2}).
 \]

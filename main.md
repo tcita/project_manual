@@ -420,7 +420,7 @@ Recursive_StrategyAndScore(A, B, original_indices=None, move_sequence=None, used
 
 
 
-### 结合具体规模分析穷举的数据量
+### 结合具体规模分析穷举获取最优解的决策路径规模
 
 计算穷举当A,B没有给定且不发生任何匹配消除时,所有的将B插入A后的所有可能性(注意这里仅仅是"最终静态组合数"), 通过静态建模，我们估算了最终手牌组合的理论上限
 
@@ -456,6 +456,7 @@ $$\binom{9}{6} \cdot \binom{3}{3} = \binom{9}{6}$$
 为了估计真实的匹配造成的影响,这里使用了基于概率的统计数据分析(蒙特卡洛模拟) 来研究一这特例 :  对于当length(A)=6  length(B)=3 时 
 
 随机生成A,B  length(A)=6  length(B)=3   随机不放回的抽取B中的一张牌,随机插入到A中,重复2次调用simulate_insertion_tool直到B中没有元素,第二次调用是基于上一次改变后的A,B, 
+
 ```python
 {
         A, B = get_A_and_B_random()
@@ -531,11 +532,11 @@ $$
 
 
 
-穷举递归搜索（Recursive_StrategyAndScore）为了保证找到最优解而去尝试所有可能,决策树是巨大的。而Verification Complexity Analysis的得到的结论 $ O(n^{3/2})$ 预示着 可以快速验证任意一个给定策略的好坏。
+穷举递归搜索/暴力递归（Recursive_StrategyAndScore）为了保证找到最优解而去尝试所有可能,决策树是巨大的。而Verification Complexity Analysis的得到的结论 $ O(n^{3/2})$ 预示着 可以快速验证任意一个给定策略的好坏。
 
 它是NP的 而且有可能是NP-hard的 
 
-在Travelling salesman problem中，访问一个城市的决定会影响到下一个城市的距离和路径选择。本问题同样的，一次“匹配”操作会彻底改变“地图”（即列表A），影响后续所有“路径”的得分(即最佳出牌的决策)。这样结构的相似性使得问题很可能是NP-Hard的。 我们使用turing-reduction 来证明
+可以联想到在Travelling salesman problem中，访问一个城市的决定会影响到下一个城市的距离和路径选择。本问题同样的，一次“匹配”操作会彻底改变“地图”（即列表A），影响后续所有“路径”的得分(即最佳出牌的决策)。这样结构的相似性使得问题很可能是NP-Hard的。 我们使用turing-reduction 来证明
 
 ### NP-hard的证明
 

@@ -203,7 +203,7 @@
 
 
 
- ## Verification Complexity Analysis:
+ ## Strategy Evaluation Complexity:
 
  这计算了给定A,B和策略后 根据规则出牌消耗的时间复杂度
 
@@ -531,7 +531,7 @@ $$
 
 
 
-穷举递归搜索/暴力递归（Recursive_StrategyAndScore）为了保证找到最优解而去尝试所有可能,决策树是巨大的。而Verification Complexity Analysis的得到的结论 $ O(n^{3/2})$ 预示着 可以快速验证任意一个给定策略的好坏。
+穷举递归搜索/暴力递归（Recursive_StrategyAndScore）为了保证找到最优解而去尝试所有可能,决策树是巨大的。而Strategy  Complexity Evaluation的得到的结论 $ O(n^{3/2})$ 预示着 可以快速验证任意一个给定策略的好坏。
 
 它是NP的 而且有可能是NP-hard的 
 
@@ -617,6 +617,7 @@ $$
 我们已经证明了两个方向的等价性。由于 `Subset Sum` 是 NP-complete 的，并且我们构造了一个到 `CARD_GAME_DEC_EQ` 的多项式时间规约，我们得出结论：
 
 ***结论i: 卡牌游戏的判定变体问题 (`CARD_GAME_DEC_EQ`) 是 NP-hard 的。***
+>虽然本文关注的是优化问题 CARD_GAME_OPT，但值得一提的是，由于其变体判定问题是 NP-hard，且因为任意给定的出牌策略可在多项式时间($ O(n^{3/2})$)内模拟并验证其得分,即属于 NP。因此，`CARD_GAME_DEC_EQ`是 NP-complete。
 
 
 关于优化问题、判定问题及其变体的关系
@@ -638,7 +639,6 @@ $$
 
 ***结论ii: 卡牌游戏的得分判定问题是NP-hard的。***
 
-
 优化问题与其判定问题的等价性 (Turing Equivalence)
 
 “得分最大化”的优化问题与其直接对应的“∃ strategy_score ≥ K ?”判定问题，在多项式时间内是图灵等价的。这意味着，如果我们拥有一个能解决其中任一问题的“神谕机”（Oracle），我们就能在多项式时间内解决另一个。
@@ -658,15 +658,13 @@ $$
 ***结论iii : 从计算难度的角度看，这两个问题是等价的。证明“score ≥ K”判定问题的NP-Hard性，就等同于证明了原优化问题的NP-Hard性。***
 
 
-
+该卡牌游戏的核心策略的多种形式的提出，其计算难度都触及了NP问题的理论上限。因此，在P≠NP的假设下，不存在解决此问题的高效（多项式时间）算法。
 
 故我们的逻辑链条为  变体判定问题是NP-hard的 -> 优化问题对应的判定问题是 NP-Hard 的 -> 优化问题是 NP-Hard 的  
 
-该卡牌游戏的核心策略的多种形式的提出，其计算难度都触及了NP问题的理论上限。因此，在P≠NP的假设下，不存在解决此问题的高效（多项式时间）算法。
 
-再由于上文证明的Verification Complexity Analysis的得到的结论 $ O(n^{3/2})代表着可以在多项式时间验证优化问题,我们可以得到
 
-**卡牌游戏得分的泛化版本最大化问题是NP-Complete的**
+**卡牌游戏得分的泛化版本最大化问题是NP-Hard的**
 
 
 

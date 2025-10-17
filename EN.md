@@ -750,22 +750,7 @@ In contrast, for the Transformer, larger datasets generally lead to better model
 
 It is important to emphasize a key distinction: **the Genetic Algorithm and the Transformer utilize the training set in fundamentally different ways**.
 
-Let us revisit the structure of a training sample:
 
-**Sample Example:**
-```json
-{
-    "A": [10, 3, 4, 2, 12, 9],
-    "B": [3, 8, 4],
-    "max_score": 55,
-    "best_moves": 
-    [
-        [0, 0],
-        [1, 1],
-        [2, 5]
-    ]
-}
-```
 The Genetic Algorithm (GA) works by iterating over every possible insertion position and using a genome (i.e., a set of heuristic parameters) to evaluate the "value" or fitness of inserting an element from **B** at that position. The training set provides a fixed collection of **(A, B)** pairs, which serves as a benchmark environment for evaluating and selecting effective genomes.  
 
 Importantly, the GA is fundamentally a **heuristic search method**—it still explores the space of possible insertion strategies (though not exhaustively), and for each candidate move (e.g., inserting `B[i]` into a specific position in `A`), it applies its own internal scoring logic to estimate the move’s quality. It then uses a **greedy selection** strategy to pick the move with the highest estimated value at each step.  
@@ -780,7 +765,7 @@ It does **not perform any explicit enumeration or search**. Instead, it approxim
 
 We further analyze this ambiguity—particularly the tension between the Transformer’s architectural inductive biases and the algorithmic nature of the target function—in the section titled **“Conflict in Transformer Modeling Paradigms and Analysis of Inductive Biases.”**
 
-Dataset generation code:
+Dataset generation function:
 
 ```python
 generate_training_data(num_samples=10000)  
@@ -795,3 +780,20 @@ The length of `best_moves` is not always 3. This occurs when, after playing two 
 Skipping them might discard valuable underlying relationships in the data, while padding could potentially introduce noise.
 
 This trade-off must be evaluated based on the performance of models trained under each approach. Subsequent experimental validation shows that models trained on padded data consistently outperform those trained on skipped data. A detailed comparative analysis is provided in Section 2 under the subsection titled ***"Dataset Preprocessing: Padding vs. Skipping."***
+
+Therefore, we now assume by default that the dataset has undergone padding processing; specific analytical details will be discussed thoroughly in the AI model evaluation.
+
+Since A and B are randomly generated using the `deal_cards_tool`, the dataset needs to be deduplicated, which can be accomplished using Python's `set`. Subsequently, a detailed inspection of the data format, along with exception handling, is required (see the code in `dedup.py` [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/json/dedpu.py) for details).
+
+Finally, we obtain the dataset for the genetic algorithm, named `data_GA.json`, containing 10,000 samples. Here is an example sample:
+
+```json
+{
+    "A": [10, 3, 4, 2, 12, 9],
+    "B": [3, 8, 4],
+    "max_score": 55,
+    "best_moves": [[0, 0], [1, 1], [2, 5]]
+}
+```
+
+The dataset for the Transformer, `data_TR.json`, is created and processed in the same way (see the code in `Get_trainingset_huge.py`[code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/Get_trainingset_huge.py)). However, due to its large size, multiprocessing is employed to accelerate data generation, and the resulting JSON files are subsequently converted to JSONL format to support streaming loading. The number of samples was initially set to 5 million before deduplication.

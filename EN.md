@@ -209,7 +209,7 @@ First, we perform a generalized mathematical analysis of the problem:
 
 ---
 
-### Verification Complexity Analysis:  
+### Strategy Evaluation Complexity:  
 This computes the time complexity required to determine the outcome—according to the game rules—given arrays A and B and a specified insertion position(strategy).
 
 For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose $|B| = n$ and $|A| = m$. In the first step, there are $n$ choices for which element to insert, and for each such choice, there are $m+1$ possible insertion positions. Thus, there are $n \cdot (m+1)$ possible paths at the first level.
@@ -565,254 +565,233 @@ Exhaustive recursive search / brute-force recursion (Recursive_StrategyAndScore)
 
 The problem is in NP and is likely NP-hard.
 
-This resembles the Travelling Salesman Problem (TSP), where the decision to visit a particular city directly affects the distances and path choices for subsequent cities. Similarly, in our problem, a single "matching" operation fundamentally alters the "map" (i.e., list A), thereby influencing the scores (i.e., optimal card-playing decisions) of all subsequent "paths." This structural similarity strongly suggests that our problem is NP-hard. We formally prove this using a Turing reduction.
+This resembles the Travelling Salesman Problem (TSP), where the decision to visit a particular city directly affects the distances and path choices for subsequent cities. Similarly, in our problem, a single "matching" operation fundamentally alters the "map" (i.e., list A), thereby influencing the scores (i.e., optimal card-playing decisions) of all subsequent "paths." This structural similarity strongly suggests that our problem is NP-hard.
 
-## Proof of NP-hardness
+### NP-hardness Proof
 
-Proof: The Card Game Optimization Problem (CARD_GAME_OPT) is NP-hard
+**Proof: The Card Game Optimization Problem (CARD_GAME_OPT) is NP-hard**
 
-In this proof, we follow standard theoretical computer science conventions. The input size of a problem instance is defined as the total number of bits required for its **standard binary representation**. Therefore, the input size of a numerical value N is O(log N). The time complexity of algorithms will be measured based on this input size.
+In conducting this proof, we follow the standard conventions of theoretical computer science. The input size of a problem instance is defined as the total number of bits required for its **standard binary representation**. Therefore, the input size of a numerical value N is O(log N). The time complexity of algorithms will be measured based on this input size.
 
-#### **1. Proof Strategy**
+### 1. Discussion on the Variant: "Is There a Strategy to Achieve Exactly K Points?"
 
-To prove that the optimization problem `CARD_GAME_OPT` is NP-hard, we employ a **Turing Reduction** from a known NP-complete problem—the **Subset Sum Problem**.
+We leverage the **Subset Sum problem**, a known NP-hard problem, and employ a standard reduction structure using Karp reduction to prove the NP-hardness of this variant.
 
-The core logic of the proof follows a **proof by contradiction**:
-First, we assume that `CARD_GAME_OPT` is **not** NP-hard, meaning there exists a polynomial-time algorithm that can solve it. Then, we demonstrate how to use this hypothetical algorithm as an oracle to design **another** polynomial-time algorithm that solves the Subset Sum Problem.
+### **Step 1: Define Related Problems**
 
-If the above logic holds, it would mean that an NP-complete problem can be solved in polynomial time, leading to the conclusion that P=NP. This contradicts the fundamental assumption in computational complexity theory that P≠NP, thus our initial assumption must be false.
+1. **Card Game Optimization Problem (`CARD_GAME_OPT`)**
+   * **Instance:** Two initial card lists `A` and `B`, where card values are positive integers.
+   * **Problem:** Find a card-playing strategy that maximizes the final total score.
 
-#### **2. Problem Definitions**
+2. **Card Game Decision Problem with Exact Match (`CARD_GAME_DEC_EQ`)**
+   To perform the reduction, we define the "exact equality" decision version:
+   * **Instance:** Two initial card lists `A` and `B`, and a target integer `K`.
+   * **Problem:** Does there exist a card-playing strategy such that the final total score **exactly equals** `K`?
 
-* **Subset Sum Problem**
-    * **Input**: A **set** `S = {s₁, s₂, ..., sₙ}` consisting of `n` **distinct** positive integers, and a target integer `T`.
-    * **Question**: Does there exist a subset `S' ⊆ S` such that the sum of all elements in `S'` equals exactly `T`?
-    * **Complexity**: This is a classic NP-complete problem[1]. We specifically refer to its formulation dealing with sets of distinct integers to ensure the validity of the reduction.
+3. **Subset Sum Problem**
+   This is a classic NP-complete problem [1]. We specifically refer to its form dealing with distinct integer sets to ensure the validity of the reduction.
+   * **Instance:** A set of `n` distinct positive integers $S = \{s_1, s_2, ..., s_n\}$, and a target integer `T`.
+   * **Problem:** Does there exist a subset `S'` ⊆ `S` such that the sum of all elements in `S'` exactly equals `T`?
 
-* **Card Game Optimization Problem (CARD_GAME_OPT)**
-    * **Input**: Two card lists `A` and `B`.
-    * **Question**: Find a card-playing strategy that **maximizes** the total score obtained, and return this maximum score.
+### **Step 2: Construct the Reduction**
 
-#### **3. Reduction Proof**
+Our goal is to construct an algorithm that can, in polynomial time, transform any instance `(S, T)` of the Subset Sum problem into an equivalent instance `(A, B, K)` of the Card Game Decision Problem.
 
-**Step 1: Contradiction Assumption**
+Given a Subset Sum instance `(S, T)`, we construct an instance of `CARD_GAME_DEC_EQ` as follows:
 
-Assume that `CARD_GAME_OPT` has a polynomial-time solution. We call this hypothetical algorithm `Solve_OPT`. We can view it as an oracle `O` that can compute `O(A, B) = max_score` in polynomial time.
+1. **Choose a sufficiently large base number `X`:**
+   Let $Sum(S)$ be the sum of all elements in set `S`. We choose an integer `X` such that $X > Sum(S)$. Since `T` must not exceed $Sum(S)$ for the Subset Sum problem to be meaningful, `X` is necessarily greater than both `T` and any element in `S`. This `X` can be computed and represented in polynomial time (e.g., take $Sum(S) + 1$).
 
-**Step 2: Design a New Algorithm to Solve the Subset Sum Problem**
+2. **Construct initial lists `A` and `B`:**
+   * `A = [ X ]`
+   * `B = [ X ] + S` (where `+` denotes list concatenation)
 
-We design a new algorithm called `SubsetSumSolver` that takes an instance `(S, T)` of the Subset Sum Problem as input. This algorithm determines whether a solution exists by calling the oracle `O`.
+3. **Set the target score `K`:**
+   * `K = 2X + T`
 
-**A. Oracle Capability Encapsulation**
+This transformation process (computing `X`, creating `A` and `B`) involves only basic arithmetic and list operations, with time and space complexity polynomial in the size of input `S`. Therefore, this is a polynomial-time reduction.
 
-The `SubsetSumSolver` algorithm needs to "translate" the mathematical problem it wants to query into a game problem that the oracle `O` can understand. To this end, the algorithm internally implements a core function `MaxSubsetSum(S_sub)`.
+### **Step 3: Prove the Correctness of the Reduction**
 
-* **Operation flow of function `MaxSubsetSum(S_sub)`:**
-    1. The function receives `S_sub` as a parameter, where `S_sub` ⊂ `S`.
-    2. Based on this parameter, the function programmatically constructs a game instance `I = (A=[X], B=[X] + S_sub)`.
-       Here, X is a pre-selected integer sufficiently large to be greater than Sum(S).
+Now we must prove: **The Subset Sum problem has a solution if and only if the constructed Card Game Decision Problem has a solution.**
 
-     >*Construction method: For any S, we can obtain X by calculating the sum of all elements in S and adding 1, i.e., X = Sum(S) + 1.
-     >Then construct A=[X] and B=[X] + S_sub. This construction satisfies the rules of the card game and obviously holds for any S.
+#### **(⇒) Sufficiency Proof**
+*If the Subset Sum problem has a solution, then there exists a strategy in the card game that scores exactly `K`.*
 
-    3. The function passes the constructed instance `I` to the oracle `O` and obtains the return value `max_score`.
-    4. The function computes and returns `max_score - 2X`.
+If the Subset Sum problem has a solution, then there exists a subset $S' \subseteq S$ with element sum $Sum(S') = T$. We can construct the following strategy:
 
-* **Function Capability Analysis:**
-    Since elements in `S` are distinct and X is extremely large, the only way to score is by matching two X cards. Therefore, since S_sub contains distinct elements, the result of `max_score - 2X` is exactly the maximum subset sum of the input set `S_sub` (i.e., the sum of all elements in `S_sub`). Since constructing the instance, calling oracle `O`, and performing subtraction are all polynomial-time operations, the `MaxSubsetSum` function itself is also polynomial-time.
+1. Through a series of operations, the player arranges all cards in `S'` between the two `X` cards, forming a scoring structure `[X, S', X]`.
+2. According to the game's matching rules (as described in the main text), this structure produces a score of $2X + Sum(S')$.
+3. Since $Sum(S') = T$, the score from this step is $2X + T = K$.
+4. After this scoring, both `X` cards and all cards in `S'` are removed. The remaining cards on the field are from set $S \setminus S'$. Because the elements in the original set `S` are distinct, these remaining cards have distinct values and cannot form any matching scores.
+5. Therefore, the final total score is **exactly** `K`.
 
-**B. Main Body of `SubsetSumSolver` Algorithm**
+#### **(⇐) Necessity Proof**
+*If there exists a strategy in the card game that scores exactly `K`, then the Subset Sum problem has a solution.*
 
-This algorithm uses its internal function `MaxSubsetSum` to determine whether a subset with sum `T` exists.
+If there exists a strategy that achieves a final score of exactly $K = 2X + T$, let's analyze the source of the score. In this constructed instance, the only cards that can form a match are the two `X` cards.
 
-* **Algorithm execution flow `SubsetSumSolver(S, T)`:**
-    1. **Initial check**: If `T < 0` or `T > MaxSubsetSum(S)`, then a solution obviously does not exist, and the algorithm returns "No".
-    2. **Constructive solution**:
-        a. Initialize target sum `T_rem = T`.
-        b. Create a copy `S_rem` of `S` as the set of elements to be examined, sorted in descending order.
-        c. Iterate through each element `sᵢ` in `S`:
-            i. Remove `sᵢ` from `S_rem`.
-            ii. Determine whether `sᵢ` should be added to the final solution:
-                * If `sᵢ <= T_rem`,
-                and `T_rem - sᵢ <= MaxSubsetSum(S_rem)` (if sᵢ is added to the solution set, it means the remaining elements can potentially sum to the remaining target)
-                
-                This means if we select `sᵢ`, the remaining target sum `T_rem - sᵢ` **may possibly** be achieved by the remaining elements `S_rem`. The algorithm makes the decision to consider `sᵢ` as part of the solution and updates `T_rem = T_rem - sᵢ`.
-    3. **Return result**: After iterating through all elements, if `T_rem` equals exactly `0`, it means the algorithm successfully found a combination of elements `S_solution` whose sum is `T`. The algorithm returns "Yes". Otherwise, it returns "No".
+1. **Case 1: The two `X` cards match directly adjacent.**
+   If the strategy makes the two `X` cards directly adjacent forming an `[X, X]` structure, then the score will be `2X`. Afterward, only the distinct cards from set `S` remain on the field, which cannot score further. The final total score is `2X`. But this does not equal $K = 2X + T$ (since `T` is a positive integer). Therefore, this strategy cannot achieve the target score `K`.
 
-The total correctness of this algorithm includes:
+2. **Case 2: The two `X` cards match non-adjacently.**
+   For the two `X` cards to match, there must be some cards from `S` between them. Let the subset of cards sandwiched in between be $S_{mid} \subseteq S$. The scoring structure formed is `[X, S_mid, X]`.
+   * The score from this structure is $2X + Sum(S_{mid})$.
+   * After scoring, the remaining cards on the field cannot match again. Therefore, this is the final total score.
+   * For the total score to exactly equal `K`, we must have: $2X + Sum(S_{mid}) = K = 2X + T$.
+   * This directly yields $Sum(S_{mid}) = T$.
 
-    A. Termination: The algorithm always halts in a finite number of steps.
-    B. Partial Correctness: The result after the algorithm halts is correct.
-        To prove partial correctness, we need to prove:
-            B1. Soundness: When the algorithm returns "Yes", the problem indeed has a solution.
-            B2. Completeness: When the problem has a solution, the algorithm will definitely return "Yes".
+   This means we have found a subset of `S` ($S_{mid}$) whose element sum equals `T`. Therefore, the Subset Sum problem has a solution.
 
-Termination is obvious, as the algorithm terminates after traversing S.
+We have proven the equivalence in both directions. Since `Subset Sum` is NP-complete, and we have constructed a polynomial-time reduction to `CARD_GAME_DEC_EQ`, we conclude:
 
-#### **Proof: Soundness**
+***Conclusion i: The decision variant of the card game problem (`CARD_GAME_DEC_EQ`) is NP-hard.***
+>Although this paper focuses on the optimization problem CARD_GAME_OPT, it is worth mentioning that since its variant decision problem is NP-hard, and because any given card-playing strategy can be simulated and its score verified in polynomial time ($O(n^{3/2})$), it belongs to NP. Therefore, `CARD_GAME_DEC_EQ` is NP-complete.
 
-**Question**: If the `SubsetSumSolver` algorithm ends with T_rem = 0, why does this indicate that the algorithm successfully found a combination of elements `S_solution`?
+### Relationship Between Optimization Problem, Decision Problem, and Their Variants
 
-#### **1. Define Loop Invariant**
+Now we explore the intrinsic connections between three problems:
 
-Let us define an equation that always holds during the algorithm's loop process.
+- **Variant Decision Problem**: As proven above, "Does there exist a strategy such that the total score exactly equals a given value K?" (proven to be NP-hard)
 
-Let `T_rem(k)` be the value of `T_rem` after the algorithm has examined the first `k` elements.
-Let `S_solution(k)` be the `S_solution` set after the algorithm has examined the first `k` elements.
+- **Decision Problem**: Directly corresponding to the optimization problem, "Does there exist a strategy such that the total score is at least a given value K?" (∃ strategy_score ≥ K)
 
-The **loop invariant** we want to prove is:
-$$T_{\text{rem}}(k) + \sum_{s \in S_{\text{solution}}(k)} s = T$$
+- **Optimization Problem**: The core problem studied in the project, "Maximize the total game score."
 
-The behavior of T_rem is to be initialized to T, then continuously subtract potentially viable sᵢ, which is T minus the sum of elements already selected into the solution set.
+These three have tight computational complexity connections:
 
-This equation shows that after each step of the loop, **the total target T minus the sum of elements already selected** plus **the sum of elements already selected**, always equals **the original total target `T`**. The equation itself is obviously true.
-
-#### **2. Proof by Mathematical Induction**
-
-We will prove by mathematical induction that this invariant holds throughout the algorithm's execution.
-
-* **Base Case (equivalent to the simplest case of a recurrence relation): `k = 0`**
-    Before the loop begins (i.e., when 0 elements have been examined):
-    * `S_solution(0)` is the empty set `[]`, so its element sum `Sum(S_solution(0)) = 0`.
-    * `T_rem(0)` is initialized to `T`.
-    * At this point, the invariant equation is: `T_rem(0) + Sum(S_solution(0)) = T + 0 = T`.
-    * **Conclusion**: Before the loop begins, the invariant holds.
+1. We proved that the "score = K" variant decision problem is NP-hard. This reveals the inherent computational difficulty of the game rules—even precisely achieving a specific score is theoretically challenging.
 
-* **Inductive Step**
-    **Assume** that after examining the `(k-1)`-th element, the invariant holds. That is:
-    $$T_{\text{rem}}(k-1) + \sum_{s \in S_{\text{solution}}(k-1)} s = T$$
-    Now, we analyze the two cases when the algorithm examines the `k`-th element `sₖ`:
+2. The "score = K" problem is a special case of the "score ≥ K" problem. Any algorithm that can solve the more general "score ≥ K" problem must correctly handle all its special cases. Therefore, the worst-case time complexity of solving the "score ≥ K" problem must be no less than the complexity of solving the "score = K" problem. Thus, the "score ≥ K" decision problem directly corresponding to the optimization problem is also NP-Hard.
 
-    * **Case 1: After adding `sₖ` to the solution set `S_solution`**
-        According to the algorithm's decision logic, this will happen. At this point, the state is updated as follows:
-        * `S_solution(k)` = `S_solution(k-1) ∪ {sₖ}`, therefore `Sum(S_solution(k)) = Sum(S_solution(k-1)) + sₖ`.
-        * `T_rem(k)` = `T_rem(k-1) - sₖ`.
+***Conclusion ii: The score decision problem of the card game is NP-hard.***
 
-        We substitute the new state into the left side of the invariant equation:
-        `T_rem(k) + Sum(S_solution(k))`
-        `= (T_rem(k-1) - sₖ) + (Sum(S_solution(k-1)) + sₖ)`
-        `= T_rem(k-1) + Sum(S_solution(k-1))`
-        According to our inductive hypothesis, the result of the above expression equals `T`.
-        **Therefore, in this case, the invariant still holds after the `k`-th step.**
+### Equivalence of Optimization Problem and Its Decision Problem (Turing Equivalence)
 
-    * **Case 2: `sₖ` is not added to the solution set `S_solution`**
-        In this case, the state is updated as follows:
-        * `S_solution(k)` = `S_solution(k-1)`, therefore `Sum(S_solution(k)) = Sum(S_solution(k-1))`.
-        * `T_rem(k)` = `T_rem(k-1)`.
+The "score maximization" optimization problem and its directly corresponding "∃ strategy_score ≥ K?" decision problem are Turing equivalent in polynomial time. This means that if we have an "oracle" that can solve either problem, we can solve the other in polynomial time.
 
-        We substitute the new state into the left side of the invariant equation:
-        `T_rem(k) + Sum(S_solution(k))`
-        `= T_rem(k-1) + Sum(S_solution(k-1))`
-        According to our inductive hypothesis, the result of the above expression equals `T`.
-        **Therefore, in this case, the invariant also still holds after the `k`-th step.**
+- **(Optimization ⇒ Decision):** If we can solve the optimization problem, we obtain the maximum score max_score.
+  
+  Compare max_score with K:
+  
+  - If max_score ≥ K, then since max_score is a strategy_score, there exists a strategy with strategy_score ≥ K, so the decision result is true.
+  
+  - If max_score < K, then ∀strategy_score ≤ max_score < K, yielding ∀strategy_score < K, so the decision result is false.
+  
+  Thus we can answer (∃ strategy_score ≥ K?) in constant time.
 
-* **Conclusion**
-    Through mathematical induction, we have proven that this loop invariant `T_rem(k) + Sum(S_solution(k)) = T` always remains valid after each iteration of the algorithm.
+- **(Decision ⇒ Optimization):** If we can solve the "score ≥ K?" decision problem, we can perform binary search over all possible score ranges with time complexity O(log n), and after logarithmic oracle calls, precisely find max_score.
 
-#### **3. Corollary**
+***Conclusion iii: From a computational difficulty perspective, these two problems are equivalent. Proving the NP-hardness of the "score ≥ K" decision problem is equivalent to proving the NP-hardness of the original optimization problem.***
 
-When the algorithm finishes traversing all `n` elements and terminates, this invariant still holds. Let `T_rem_final` and `S_solution_final` be the final state. We have:
-$$T_{\text{rem\_final}} + \sum_{s \in S_{\text{solution\_final}}} s = T$$
-At this point, the algorithm's return logic is to check whether `T_rem_final` equals `0`. If `T_rem_final = 0`, we can substitute it into the above proven equation:
-$$0 + \sum_{s \in S_{\text{solution\_final}}} s = T$$
-$$\sum_{s \in S_{\text{solution\_final}}} s = T$$
-**Proof complete.** This shows that if and only if `T_rem` is 0 when the algorithm terminates, the sum of elements in our constructed solution set `S_solution` precisely equals the original target `T`.
+The core strategy of this card game, in its various forms, touches the theoretical upper limit of NP problems. Therefore, under the assumption that P≠NP, there exists no efficient (polynomial-time) algorithm to solve this problem.
 
-Therefore, if T_rem becomes 0 when the algorithm ends, we can confirm that Sum(S_solution) must equal T.
+Thus our logical chain is: Variant decision problem is NP-hard → The decision problem corresponding to the optimization problem is NP-hard → The optimization problem is NP-hard
 
-#### **Proof: Completeness**
+**The generalized version of the card game score maximization problem is NP-Hard.**
 
-**Question**: If the problem truly has a solution, why must T_rem necessarily equal 0 when the algorithm ends (after the loop ends, can the invariant deduce the algorithm's correct result)?
+### Discussion on Algorithm Optimization / Proposal of Surrogate Modeling
 
-**Proposition to prove**: For any Subset Sum Problem instance `(S, T)` that does have a solution, the `SubsetSumSolver` algorithm described in the report guarantees it will terminate and return "Yes" (i.e., final `T_rem = 0`).
+**Caching:**  
+The NP-hard nature of the problem leads to an extremely large decision space. We have already demonstrated that even for a small-scale instance with `length(A) = 6` and `length(B) = 3`, the decision space remains enormous. Consequently, caching techniques are difficult to apply effectively in implementation, as cache hits are exceedingly rare—a fact already confirmed through experimental validation.
 
-**Proof by contradiction**:
+**Dynamic Programming (DP):**  
+The state of list A changes after every insertion, and the content of A itself is highly complex. This makes it challenging to identify overlapping subproblems, which are essential for dynamic programming. Moreover, the dynamic and intricate nature of A’s state renders it unsuitable as a key for DP state storage and retrieval. Therefore, dynamic programming is not applicable to this specific problem.
 
-1. **Make contradiction assumption**
-    Assume the proposition to be proved is false. That is, **there exists** an optimal solution `S*` (whose sum of all elements is `T`), but the `SubsetSumSolver` algorithm **fails** after execution, ultimately returning "No" (i.e., `T_rem > 0` when the algorithm terminates).
+**Pruning / Heuristic Methods:**  
+Based on our understanding of the matching rules employed in `simulate_insertion_tool`, heuristic methods can indeed be leveraged for optimization at certain scales to prune recursive branches. To this end, I introduced a feature called `future_score`, which enables such pruning. The specific implementation details are elaborated in the genetic algorithm section.
 
-2. **Analyze the inevitable cause of failure**
-    If the algorithm's final result is incorrect, then during its execution of traversing elements in descending order, it must have made at least one "wrong" decision. We can pinpoint the moment when the algorithm makes its **first** mistake. This error must be:
-    * The algorithm **did not select** an element that should belong to the optimal solution `S*`. We call this incorrectly "skipped" element `s*`.
+***Surrogate Modeling:***  
+During this process, the `Recursive_StrategyAndScore` algorithm generates output data, which is then used as a training set to train an AI model. Once trained, the AI model learns the behavioral patterns of the original algorithm and can, within an acceptable margin of error, predict the algorithm’s output for new inputs—without actually executing the original (computationally expensive) algorithm. This surrogate modeling approach is the central focus of this discussion.
 
-    Before considering `s*`, all elements larger than `s*` have been correctly processed.
 
-3. **Analyze the conditions for the algorithm's wrong decision**
-    According to the decision logic of `SubsetSumSolver`, the algorithm "skips" `s*` because it fails to satisfy the `if` condition. This condition is `sᵢ <= T_rem` and `T_rem - sᵢ <= MaxSubsetSum(S_rem)`.
+# Part II: AI Technical Details
 
-    Analyze why this condition does not hold for `s*`:
-    * **For `s* <= T_rem`**: When processing `s*`, the value of `T_rem` equals `T` minus the sum of all selected members of `S*` that are larger than `s*` (guaranteed by S in descending order).
-    
-    Therefore, the value of `T_rem` equals exactly `s*` plus the sum of all members of `S*` that are smaller than `s*`.
-    
-    That is:
-    
-    $$T_{\text{rem}} - s^* = \sum_{x \in S^*, x < s^*} x$$
-    
-    Therefore, `T_rem >= s*` must hold.
+#### Software and Hardware Specifications
 
-    * **Thus, the only reason for decision failure** can only be that the algorithm determined at that moment:
-        $$T_{\text{rem}} - s^* > \text{MaxSubsetSum}(S_{\text{rem}})$$
+**Hardware:**
 
-4. **Derive contradiction**
-    Let's analyze both sides of this inequality:
-    * **Left side of inequality `T_rem - s*`**: According to the above analysis, this value equals **the sum of all elements in the optimal solution `S*` that are smaller than `s*`**.
-    * **Right side of inequality `MaxSubsetSum(S_rem)`**: This value is the maximum subset sum that can be formed by the set of elements `S_rem` currently "to be examined" by the algorithm.
-    * Those elements in the optimal solution `S*` that are smaller than `s*` must necessarily be a subset of the `S_rem` set. Therefore, the maximum subset sum that can be formed from `S_rem` must be greater than or equal to the sum of any of its subsets. Thus, logically it must hold that:
-    
-        $$\text{MaxSubsetSum}(S_{\text{rem}}) \geq \sum_{x \in S^*, x < s^*} x$$
+- CPU: AMD Ryzen 9 5900HS (8 Cores, 16 Threads)  
+- GPU: NVIDIA GeForce RTX 3050 Laptop (4 GB VRAM)  
+- RAM: 16 GB  
 
-        Using the equation obtained earlier, this is also:
+**Software:**
 
-        $$\text{MaxSubsetSum}(S_{\text{rem}}) \geq T_{\text{rem}} - s^*$$
-    At this point, a contradiction appears:
-    * Our **assumption** (algorithm failure) led to the conclusion: `T_rem - s* > MaxSubsetSum(S_rem)`.
-    * The **logical deduction** yields the inevitable conclusion: `T_rem - s* <= MaxSubsetSum(S_rem)`.
+- Operating System (OS): Windows 11  
+- IDE: PyCharm  
+- Version Control: Git  
+- Environment Management: conda 25.1.1  
+- Python Version: 3.12.9  
 
-    The same expression cannot simultaneously be both greater than and less than or equal to another expression. A mathematical contradiction arises.
+> **Note:** For the problem scale addressed in this work, the 4 GB of GPU memory is not a bottleneck. Although it did influence my choices regarding model hyperparameter configuration, the available hardware is sufficient for the models discussed in this paper.
 
-5. **Draw conclusion**
-    The source of the contradiction lies in our assumption in the first step. Therefore, the assumption that "a solution exists but the algorithm did not find it" is false.
 
-    Thus the proposition to be proved is true: For any Subset Sum Problem instance with a solution, the `SubsetSumSolver` algorithm guarantees to find the solution and terminate with `T_rem = 0`.
+#### Model Selection
 
-This proof ensures that the decision logic of the `SubsetSumSolver` algorithm is sufficiently **complete** and will not miss any existing solution.
+I selected the **Transformer** [3] and **Genetic Algorithm (GA)** [4] as AI models to explore this problem.
 
-Therefore, the `SubsetSumSolver` algorithm has **total correctness**.
+The reasons for choosing the **Genetic Algorithm** are twofold:  
+First, the decision sequence space is extremely large, and each decision depends on the outcome of the previous step. Genetic algorithms excel at searching for optimal solutions in complex, high-dimensional, discontinuous, or non-differentiable search spaces—precisely the characteristics of our problem.  
+Second, GAs are relatively straightforward to implement and computationally inexpensive, enabling rapid prototyping and quick results.
 
-**Step 3: Complexity Analysis and Contradiction Derivation**
+The **Transformer** was chosen for similar reasons related to interdependent decisions. In this problem, the three-card playing strategy involves sequential actions where each play dynamically modifies list A, thereby influencing subsequent decisions. The Transformer’s self-attention mechanism can effectively capture long-range dependencies and interactions between any two elements in the sequence—for example, how the first insertion affects the second and third strategic choices. This capability is crucial for deriving a high-scoring playing strategy.
 
-* **Complexity**: The `SubsetSumSolver` algorithm performs one traversal of the `n` elements in set `S`. In each loop iteration, it calls the polynomial-time `MaxSubsetSum` function once. Therefore, the running time of the entire `SubsetSumSolver` algorithm is polynomial.
-* **Contradiction**: We have designed a polynomial-time algorithm (`SubsetSumSolver`) that can accurately solve the NP-complete "Subset Sum Problem". This directly leads to the conclusion that P=NP, contradicting the fundamental assumption in computational complexity theory that P≠NP.
+Additionally, there is a practical hardware consideration: Transformer inference and training are GPU-intensive, whereas Genetic Algorithms are primarily CPU-intensive. By integrating both approaches, we can achieve hardware-level parallelism—leveraging both the CPU and GPU simultaneously during offline computation to maximize hardware utilization.
 
-**Step 4: Conclusion**
+I used a recursive exhaustive search algorithm to generate a training dataset, which was then used to train both the Genetic Algorithm and the Transformer models. The final surrogate model was constructed by integrating the outputs of these two models.
 
-The source of the above contradiction lies in our assumption in the first step—that "`CARD_GAME_OPT` has a polynomial-time solution". Therefore, this assumption must be false.
+### 1. Training Data Acquisition and Preprocessing
 
-**Thus, the Card Game Optimization Problem `CARD_GAME_OPT` is NP-hard.**
+I experimented with datasets of various sizes and ultimately decided to use approximately **10,000 samples** to train the Genetic Algorithm (GA) and about **5 million samples** to train the Transformer model.
 
-**Conclusion 2: The generalized version of the card game score maximization problem is NP-hard.**
+For the Genetic Algorithm, the entire dataset does not directly participate in "training" in the conventional sense. Instead, the GA stochastically samples from the dataset during its evolutionary process for evaluation and selection. Therefore, the key requirement for the GA dataset is **sufficient coverage and uniformity** across the problem space—rather than sheer volume.
 
-Furthermore, according to previous conclusions, the steps of the strategy_TrueScore function are:
-Sort array B → Iterate through each element of B → Check if array A and the current B element match (have intersection) → Calculate the sum of the consecutive subsequence generated by the match
+In contrast, for the Transformer, larger datasets generally lead to better model performance. However, due to constraints on training time and hardware resources, extensive testing showed that **5 million samples** strike a good balance: it is large enough to yield strong performance, while further increasing the dataset size becomes impractical and yields diminishing returns.
 
-    Size of array A is m
-    Size of array B is n
+It is important to emphasize a key distinction: **the Genetic Algorithm and the Transformer utilize the training set in fundamentally different ways**.
 
-Sorting time complexity is O(n log n)
+Let us revisit the structure of a training sample:
 
-Linear scan to check if A and B[i] satisfy the matching rule has time complexity O(n)
+**Sample Example:**
+```json
+{
+    "A": [10, 3, 4, 2, 12, 9],
+    "B": [3, 8, 4],
+    "max_score": 55,
+    "best_moves": 
+    [
+        [0, 0],
+        [1, 1],
+        [2, 5]
+    ]
+}
+```
+The Genetic Algorithm (GA) works by iterating over every possible insertion position and using a genome (i.e., a set of heuristic parameters) to evaluate the "value" or fitness of inserting an element from **B** at that position. The training set provides a fixed collection of **(A, B)** pairs, which serves as a benchmark environment for evaluating and selecting effective genomes.  
 
-Calculate the sum of the consecutive subsequence generated by the match (score from playing this card) has time complexity O(n)
+Importantly, the GA is fundamentally a **heuristic search method**—it still explores the space of possible insertion strategies (though not exhaustively), and for each candidate move (e.g., inserting `B[i]` into a specific position in `A`), it applies its own internal scoring logic to estimate the move’s quality. It then uses a **greedy selection** strategy to pick the move with the highest estimated value at each step.  
 
-Accumulate the scores corresponding to all elements of B to get the total score has time complexity O(n)
+Notably, **the GA does not use the `max_score` or `best_moves` fields from the training set** during its operation. Instead, it relies solely on its evolved heuristic to guide decisions.
 
-Total time complexity is O(n log n) + m*(O(n)+O(n)+O(n)) = O(n log n + mn)
+In contrast, the **Transformer model** directly leverages the full training data: it learns from the triplets **(A, B, best_moves)**. By observing a large number of such examples, the Transformer attempts to learn the underlying mapping  
+$$
+(A, B) \longmapsto \text{best\_moves}.
+$$
+It does **not perform any explicit enumeration or search**. Instead, it approximates the optimal strategy implicitly through pattern recognition. It is possible that the learned mapping effectively replicates the behavior of the original exhaustive recursive algorithm—or perhaps discovers an equally effective but more efficient implicit strategy. However, due to the complexity and opacity of deep neural networks, it is difficult to determine exactly what computation the model has internalized.  
 
-This is polynomial time complexity, so we obtain:
+We further analyze this ambiguity—particularly the tension between the Transformer’s architectural inductive biases and the algorithmic nature of the target function—in the section titled **“Conflict in Transformer Modeling Paradigms and Analysis of Inductive Biases.”**
 
-**Conclusion 3: The generalized version of the card game score maximization problem is in NP**
+Dataset generation code:
 
-Based on Conclusions 2 and 3:
+```python
+generate_training_data(num_samples=10000)  
+```
+(implementation available at [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/Get_trainingset.py))
 
-**The generalized version of the card game score maximization problem is NP-Complete**
+Here is a key point:
+
+The length of `best_moves` is not always 3. This occurs when, after playing two cards from hand B, the remaining card cannot form any scoring combination with hand A—i.e., no further points can be earned regardless of how the remaining card is played. In such cases, `recursive_StrategyAndScore` does not include that move in the strategy. Upon inspecting the generated `best_moves`, we found that approximately 10% of the samples exhibit this behavior (i.e., have fewer than 3 moves).
+
+***Thus, we face a critical design decision: for these `best_moves` sequences whose length is not strictly 3, should we skip them entirely or pad them to length 3?***  
+Skipping them might discard valuable underlying relationships in the data, while padding could potentially introduce noise.
+
+This trade-off must be evaluated based on the performance of models trained under each approach. Subsequent experimental validation shows that models trained on padded data consistently outperform those trained on skipped data. A detailed comparative analysis is provided in Section 2 under the subsection titled ***"Dataset Preprocessing: Padding vs. Skipping."***

@@ -32,7 +32,6 @@ This document is not a formal academic paper, nor does it claim to present rigor
 - **Rigorous Algorithmic Analysis**
 
 - **Proof of NP-Completeness for a Custom-Designed Problem, with Supporting Discussion**  
-  > *Note: The core proof appears in the main text; extended discussion is provided in the appendix.*
 
 - **Comprehensive AI Model Evaluation Framework**
 
@@ -45,7 +44,8 @@ This document is not a formal academic paper, nor does it claim to present rigor
 - **End-to-End System Design and Implementation**
 
 - **Discussion of a Tree-Based Representation Well-Suited for Expressing Combinatorial Problems (Appendix)**
-> Note: The actual code implementation is available at  https://github.com/tcita/python_server.git
+
+>  Note: The specific implementation of the code is available in the [source code of this project]((https://github.com/tcita/python_server.git)). The dataset itself is not uploaded, but the code used to generate the dataset is included.  
 
 ## Document Structure
 
@@ -408,7 +408,7 @@ Our analysis characterizes the system's behavior in this steady-state regime and
 
 First, we develop the `simulate_insertion_tool()` function capable of handling the insertion process and scoring. Since array A dynamically changes due to insertions and subsequent matches, when this function is called, the input length of A is no longer the initial length of 6, but rather ranges from 0 to 8 (as A can only be in the range 0–8 when `insertion` might be called—A cannot be negative, and when A reaches length 9, B becomes empty and no further elements can be inserted from B). After insertion and any resulting matches, A's length will be in the range 0–9.
 
-We define the function `simulate_insertion_tool(A, b, pos)` (The implementation in [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py)), which inserts element `b` into list `A` at the specified position `pos` and handles any matching that may occur.
+We define the function `simulate_insertion_tool(A, b, pos)` (The implementation in [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py#L41)), which inserts element `b` into list `A` at the specified position `pos` and handles any matching that may occur.
 
 The function returns: `[score, length_removed_due_to_matching, new_length_of_A, match_occurred (0 or 1), new_A]`.
 
@@ -438,7 +438,7 @@ Each step operates on the current version of A, and every insertion of B[i] caus
 
 Thus, we can design a recursive algorithm:
 
-`Recursive_StrategyAndScore(A, B, original_indices=None, move_sequence=None, used_indices=None)` (implementation available at [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/brute_force.py))
+`Recursive_StrategyAndScore(A, B, original_indices=None, move_sequence=None, used_indices=None)` (implementation available at [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/brute_force.py#L16))
 
 which returns: **the theoretical maximum score** and **the corresponding sequence of moves that achieves this maximum score**.
 
@@ -599,7 +599,9 @@ Our goal is to construct an algorithm that can, in polynomial time, transform an
 
 Given a Subset Sum instance `(S, T)`, we construct an instance of `CARD_GAME_DEC_EQ` as follows:
 
-1. **Choose a sufficiently large base number `X`:**
+1. **Choose a sufficiently large base number `X`:**,since all numbers are given in binary, `X` can be represented 
+in O(log(sum(S))) bits, which is polynomial in the input size.
+
    Let $Sum(S)$ be the sum of all elements in set `S`. We choose an integer `X` such that $X > Sum(S)$. Since `T` must not exceed $Sum(S)$ for the Subset Sum problem to be meaningful, `X` is necessarily greater than both `T` and any element in `S`. This `X` can be computed and represented in polynomial time (e.g., take $Sum(S) + 1$).
 
 2. **Construct initial lists `A` and `B`:**
@@ -740,7 +742,7 @@ Additionally, there is a practical hardware consideration: Transformer inference
 
 I used a recursive exhaustive search algorithm to generate a training dataset, which was then used to train both the Genetic Algorithm and the Transformer models. The final surrogate model was constructed by integrating the outputs of these two models.
 
-### 1. Training Data Acquisition and Preprocessing
+## 1. Training Data Acquisition and Preprocessing
 
 I experimented with datasets of various sizes and ultimately decided to use approximately **10,000 samples** to train the Genetic Algorithm (GA) and about **5 million samples** to train the Transformer model.
 
@@ -770,7 +772,7 @@ Dataset generation function:
 ```python
 generate_training_data(num_samples=10000)  
 ```
-(implementation available at [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/Get_trainingset.py))
+(implementation available at [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/Get_trainingset.py#L15))
 
 Here is a key point:
 
@@ -783,7 +785,7 @@ This trade-off must be evaluated based on the performance of models trained unde
 
 Therefore, we now assume by default that the dataset has undergone padding processing; specific analytical details will be discussed thoroughly in the AI model evaluation.
 
-Since A and B are randomly generated using the `deal_cards_tool`, the dataset needs to be deduplicated, which can be accomplished using Python's `set`. Subsequently, a detailed inspection of the data format, along with exception handling, is required (see the code in `dedup.py` [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/json/dedpu.py) for details).
+Since A and B are randomly generated using the `deal_cards_tool`, the dataset needs to be deduplicated, which can be accomplished using Python's `set`. Subsequently, a detailed inspection of the data format, along with exception handling, is required ( [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/json/dedpu.py#L4) for details).
 
 Finally, we obtain the dataset for the genetic algorithm, named `data_GA.json`, containing 10,000 samples. Here is an example sample:
 
@@ -796,4 +798,98 @@ Finally, we obtain the dataset for the genetic algorithm, named `data_GA.json`, 
 }
 ```
 
-The dataset for the Transformer, `data_TR.json`, is created and processed in the same way (see the code in `Get_trainingset_huge.py`[code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/Get_trainingset_huge.py)). However, due to its large size, multiprocessing is employed to accelerate data generation, and the resulting JSON files are subsequently converted to JSONL format to support streaming loading. The number of samples was initially set to 5 million before deduplication.
+The dataset for the Transformer, `data_TR.json`, is generated and processed in the same way (see the code in `Get_trainingset_huge.py`[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/Get_trainingset_huge.py)). However, due to its large size, multiprocessing is employed to accelerate data generation, and the resulting JSON files are subsequently converted to JSONL format to support streaming loading. The number of samples was initially set to 5 million before deduplication.
+
+## 2.1 Implementation of the Genetic Algorithm
+
+The code implementation can be found at: [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py)
+
+### Overview of the Genetic Algorithm Framework
+
+#### Genome Composition  
+The genome is a 6-dimensional weight vector corresponding to six game features:  
+- Current score  
+- Removal length  
+- New length  
+- Future score  
+- Sum of elements in the new A  
+- Number of common elements between A and B  
+
+#### Population Initialization  
+- Population size: 500 individuals  
+- 70% initialized within heuristic ranges, 30% completely random  
+- Diversity is introduced to prevent premature convergence  
+
+#### Selection and Reproduction  
+- **Elitism**: Top 10% of individuals are directly carried over to the next generation  
+- **Tournament selection**: Competitive selection of parents  
+- **Crossover**: Weighted average of parental weights  
+- **Mutation**: Gaussian noise added; mutation rate is adaptively adjusted  
+
+#### Evolutionary Strategies  
+Two evolutionary strategies are employed:  
+- A traditional genetic algorithm  
+- An island model algorithm [5]  
+The algorithm adaptively selects between these strategies based on historical performance.  
+
+#### Fitness Evaluation  
+- Each individual’s genome defines weights for the six features.  
+- Multi-round gameplay is simulated using these weights, and the average score is returned as fitness.  
+- For each possible card insertion position, the evaluation score is computed as the dot product between the feature vector and the weight vector.  
+
+#### Optimization Mechanisms  
+- **GPU acceleration**: Using PyTorch tensor operations  
+- **Parallel evaluation**: Multiprocessing to evaluate different individuals concurrently  
+- **Batch processing**: Minimizing GPU invocation overhead  
+- **Early stopping**: Termination if no improvement is observed over consecutive generations  
+
+#### Training Configuration  
+- Population size: 500  
+- Number of generations: 20  
+- Evaluation rounds per individual: 200  
+
+#### Output  
+The six weight parameters (genome) of the best-performing individual, which constitute the AI’s decision-making strategy model.
+
+#### Feature Design  
+Features are designed based on the game’s scoring rules:
+
+```python
+features = [
+    score,                   # Subset score under the current strategy
+    removal_length,          # Length of matched sequence to be removed
+    new_length,              # New length of A after insertion
+    future_score,            # Estimated future score
+    sum_new_A,               # Sum of elements in the new A after matching
+    B_card_proportion,       # Proportion of the played B card's value relative to remaining B cards
+]
+```
+
+The genome in the genetic algorithm is a list of six floating-point numbers, representing the weights assigned to these six features when evaluating game decisions.
+
+Since these feature values can vary significantly in magnitude, feature scaling is necessary. However, because the features are generated dynamically during gameplay, standard preprocessing (e.g., precomputed normalization) is not feasible. Therefore, after converting all features into tensors, mean and variance are computed online, and features are standardized on-the-fly.
+
+#### The "future_score" Feature
+
+Among the features, **`future_score`** is particularly novel.
+
+Since the number of cards in B is small (0 to 3), this characteristic enables the use of a heuristic approach. Specifically, `future_score` represents the **potential score achievable from the remaining cards after performing the current insertion action**.  
+
+In the game, each turn requires selecting one card from B and inserting it into A. This action may alter A’s state, which in turn affects the optimal scoring strategy for subsequent moves. Thus, `future_score` dynamically evaluates the expected payoff of future game states—much like how professional chess players consider how a current move influences their strategic options in later turns.
+
+This makes `future_score` a crucial feature for lookahead planning.
+
+The other features are derived from the return values of `simulate_insertion_tool` ([source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py)). Although `match_found` and `removal_length` contain overlapping information, `match_found` was omitted as a feature to keep the model complexity manageable.
+
+The heuristic function for computing `future_score` follows this logic:
+
+When inserting a card from B into A, after this insertion is performed, the function `calculate_future_score(A, remaining_B)` estimates the future potential score as follows:
+
+1. If A and B have **no common elements**, then `future_score = 0`.  
+2. If there are **no remaining cards in B**, then `future_score = 0`.  
+3. If **only one card remains in B**, check whether this card shares any elements with A:  
+   - If yes, call `get_best_insertion_score` ([source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py)) to compute the best possible score from inserting that card, and use this as `future_score`.  
+   - If not, `future_score = 0`.
+
+This defines the future score estimation function:  
+**`calculate_future_score(A, remaining_B)`**.

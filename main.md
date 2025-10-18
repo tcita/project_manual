@@ -34,7 +34,7 @@
 
 - **讨论了一种能够很好表达组合问题的树结构(附录)**
 
->注 代码具体实现在code_path中
+>注 代码具体实现在source code of this project 中,使用的数据集没有上传,但上传了数据集生成代码
 
 ## 文章结构
 
@@ -801,21 +801,20 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
     }
 
 
-给transformer使用的数据集data_TR.json的处理也是一样的,只是由于数据过大,使用了多进程加速获取数据集,以及后续将json格式转换jsonl以支持流式加载    样本数在去重前预设为5M
+给transformer使用的数据集data_TR.json的生成和处理也是一样的,只是由于数据过大,使用了多进程加速获取数据集,以及后续将json格式转换jsonl以支持流式加载    样本数在去重前预设为5M
 
 
 
 
 ## 2.1 遗传算法的实现
 
-
+代码实现见:[code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py))
 
 ### 遗传算法框架概述
 
 
 ##### 基因的组成
-- `calculate_future_score` :用启发式方法计算未来得分这个特征
-6维权重向量，对应6个游戏特征：当前得分、移除长度、新长度、未来得分、新A的元素总和、交集数量。
+基因是6维权重的向量，对应6个游戏特征：当前得分、移除长度、新长度、未来得分、新A的元素总和、A与B的交集个数。
 
 ##### 种群初始化
 - 种群规模500个个体
@@ -830,14 +829,10 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 - 变异：添加高斯噪声，变异率自适应调整
 
 ##### 进化策略
-使用了 传统的遗传算法 和岛屿模型算法[5] 这两种进化策略 
-
-- `island_model_evolution()`: 岛屿模型，将种群分割为独立岛屿，定期迁移优秀个体
-- 动态方法切换： 根据历史表现自适应选择进化方法
+使用了 传统的遗传算法 和岛屿模型算法[5] 这两种进化策略 ,并根据历史表现自适应选择进化方法
 
 ##### 适应度评估
-- `evaluate_genome()`: 用个体权重执行多轮游戏，返回平均得分
-- `GA_Strategy()`: 基于权重计算最优插牌策略，使用特征向量与权重的点积评估每个可能位置
+-  依照个体的基因决定的各种特征权重执行多轮游戏，返回平均得分, 基于权重计算最优插牌策略，使用特征向量与权重的点积评估每个可能位置
 
 
 ##### 优化机制
@@ -852,7 +847,7 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 - 评估轮数：200轮/个体
 
 ##### 输出结果
-最优个体的6个权重参数，构成AI的决策策略模型。
+最优个体的6个权重参数(基因)，构成AI的决策策略模型。
 
 
 
@@ -882,7 +877,6 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 
 这里在将所有特征转换为张量后 在线的计算了均值和方差 然后标准化
 
-具体实现见 code_path 中GA_Strategy.py里的做法
 
 
 #### "future_score"特征
@@ -890,20 +884,20 @@ bestmoves的长度未必都是3  因为当B中就算再出牌也不能得分时(
 由于B中的牌数量较少(0~3) 所以可以根据这个特点进行启发式算法,  这里的future_score意思是  由于每次要从B中选一张插入A,而且每次的选取,插入都可能造成A的变化,然后导致后续的选取,插入步骤的最优得分策略变化  future_score指每次选取插入这个操作之后,剩余牌可能的得分  这是一个很重要的特征  它动态的评估了未来的卡牌状态  就好像象棋职业玩家会考虑某一步对以后的棋子策略带来的影响一样
 
 
-其他的特征选取于simulate_insertion_tool的返回值  match_found和removal_length有重合,考虑到模型复杂度,它没有被作为特征
+其他的特征选取于simulate_insertion_tool[code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py))的返回值  match_found和removal_length有重合,考虑到模型复杂度,它没有被作为特征
 
 
-这个计算future_score的启发式函数的思路是这样的,从B中的牌抽取一张插入A时,同时考虑在这次选取插入操作实现之后:
+这个计算future_score的启发式函数的思路流程是这样的,从B中的牌抽取一张插入A时,同时考虑在这次选取插入操作实现之后:
 
 1 当如果 A 和 B 没有任何重复元素,那么future_score是0
 
 2 如果没有剩余的B玩家的牌,那么future_score是0
 
-3 如果B中只剩下一张牌,检查这张牌和A是否有交集 如果有  则调用get_best_insertion_score计算得分作为future_score,如果没有那么future_score是0
+3 如果B中只剩下一张牌,检查这张牌和A是否有交集 如果有  则调用get_best_insertion_score[code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py))计算得分作为future_score,如果没有那么future_score是0
 
 
 以此定义未来得分函数
-calculate_future_score(A, remaining_B) (实现见code_path)
+calculate_future_score(A, remaining_B) 
 
 
 
@@ -919,8 +913,9 @@ calculate_future_score(A, remaining_B) (实现见code_path)
 
 island_model_evolution(population, fitnesses, pop_size, tournament_size, mutation_strength,
                            num_rounds, islands=3, migration_rate=0.1,
-                           generation=0, max_generations=60)(实现见code_path)
+                           generation=0, max_generations=60)[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py#L267))
 """
+每个岛屿随机选择个体进行迁移，替换目标岛屿中适应度最差的个体。
 返回由于岛屿模型进化得到的新的种群
 """
 

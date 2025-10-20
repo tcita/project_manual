@@ -906,28 +906,35 @@ calculate_future_score(A, remaining_B)
 ### 部分核心函数说明:
 
 策略生成函数:
-```python
-GA_Strategy(genome, A, B)[code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py#L71)
-"""
-根据A,B和给定的基因生成策略 
-计算每一个插入位置的特征张量,并与它和基因张量做点积计算 得到这个位置的"评估价值",并根据评估价值从大到小进行排序
+def GA_Strategy(genome, A, B):[code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py#L71)
 
-返回根据排序后的顺序生成策略
-"""
-```
+    """根据基因组 genome 和牌组 A、B 生成出牌策略。
+
+    对 B 中每张牌，模拟其在 A 中所有可插入位置，计算 6 个特征张量，
+    并用 genome 对特征加权，得到每个位置的评估价值。
+    按评估价值降序排列，生成最终出牌策略。
+
+    Args:
+        genome (list[float]): 长度为6的权重基因，用于加权特征。
+        A (list): 当前手牌或已出牌序列。
+        B (list): 待出的候选牌列表。
+
+    Returns:
+        list: 按评估价值排序后得到的出牌策略
+    """
 
 基因评估函数:
-```python
+
 evaluate_genome(genome, num_rounds, seed_base)[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py#L178))
 """
 用同一批种子生成的A,B,和基因,调用GA_Strategy函数完成从A,B和基因到对应的具体策略的转换
+
 
 
 使用calculate_score_by_strategy函数[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py#L374)进行策略的实际得分计算,评估多次,取得分的平均值
 """
 ```
 
-```python
 
 岛与进化模型函数:
 island_model_evolution(population, fitnesses, pop_size, tournament_size, mutation_strength,
@@ -936,6 +943,8 @@ island_model_evolution(population, fitnesses, pop_size, tournament_size, mutatio
 """
 将所有种群均匀分布在3个岛屿中
 各个岛屿独立进化,调用基因评估函数evaluate_genome计算适应度,保留当前岛屿中适应度最高的 10% 个体，直接进入下一代
+
+
 每个岛屿随机选择个体进行迁移，替换目标岛屿中适应度最差的个体。
 返回由于岛屿模型进化得到的新的种群
 """

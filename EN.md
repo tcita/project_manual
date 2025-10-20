@@ -893,3 +893,188 @@ When inserting a card from B into A, after this insertion is performed, the func
 
 This defines the future score estimation function:  
 **`calculate_future_score(A, remaining_B)`**.
+
+# Core Function Documentation
+
+## Strategy Generation Function
+[Source Code](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py)
+```python
+def GA_Strategy(genome, A, B):
+    """
+    Generate a card playing strategy based on genome and card sets A and B.
+    For each card in B, simulate all possible insertion positions in A, 
+    calculate 6 feature tensors, weight features using genome, 
+    and obtain evaluation value for each position.
+    Sort by evaluation value in descending order to generate final strategy.
+    
+    Args:
+        genome (list[float]): Weight genes of length 6, used for feature weighting.
+        A (list): Current hand cards or played card sequence.
+        B (list): List of candidate cards to be played.
+    
+    Returns:
+        list: Card playing strategy sorted by evaluation value.
+    """
+```
+
+
+## Genome Evaluation Function
+
+```python
+def evaluate_genome(genome, num_rounds, seed_base):
+    """
+    Calls GA_Strategy function to complete the conversion from A, B and genome 
+    to corresponding specific strategy. We need to use the same batch of A, B 
+    for genome evaluation, so a fixed seed_base is required.
+    
+    Uses calculate_score_by_strategy function to calculate actual score of strategy,
+    evaluates multiple times, and takes average score as final evaluation result.
+    
+    Args:
+        genome (list[float]): Genome to be evaluated.
+        num_rounds (int): Number of evaluation rounds.
+        seed_base (int): Seed base for generating A and B.
+    
+    Returns:
+        float: Average evaluation score of the genome.
+    """
+```
+
+
+## Island Model Evolution Function
+
+```python
+def island_model_evolution(population, fitnesses, pop_size, tournament_size, 
+                          mutation_strength, num_rounds, islands, migration_rate,
+                          generation=0, max_generations=60):
+    """
+    1. Evenly distribute entire population across 3 islands
+    2. Each island evolves independently, calls evaluate_genome to calculate fitness,
+       preserves top 10% individuals with highest fitness in current island, 
+       directly entering next generation
+    3. Use tournament selection to select winner individuals, randomly select parents
+       among them, perform crossover and mutation to generate offspring, 
+       randomly select from these excellent offspring to replace individuals 
+       with low fitness in another island
+    
+    Args:
+        population: Current population (list)
+        fitnesses: Fitness values of current population (list)
+        pop_size: Total population size (int)
+        tournament_size: Tournament selection size (int)
+        mutation_strength: Mutation strength (float)
+        islands: Number of islands (int)
+        migration_rate: Migration rate (float)
+    
+    Returns:
+        new_population: Population of all islands after evolution (list)
+    """
+```
+
+
+## Training Parameters
+
+### Main Genetic Algorithm Function
+
+```python
+def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, 
+                     tournament_size, evolution_methods,
+                     early_stop_generations, early_stop_threshold):
+    """
+    Main genetic algorithm function.
+    
+    Args:
+        pop_size: Population size
+        generations: Maximum number of generations
+        num_rounds: Number of rounds to evaluate each genome
+        elitism_ratio: Elite proportion
+        tournament_size: Tournament selection size
+        evolution_methods: List of available evolution methods
+        method_probs: Usage probability of each evolution method
+        early_stop_generations: Number of consecutive generations for early stopping
+        early_stop_threshold: Improvement threshold for early stopping
+    
+    Returns:
+        best_genome: Best genome
+    """
+```
+
+
+### Tested Parameters
+
+After testing, these parameters have yielded sufficiently good results:
+
+```python
+pop_size = 500
+generations = 25
+num_rounds = 500
+elitism_ratio = 0.1
+tournament_size = 3
+evolution_methods = ['island', 'standard']
+early_stop_generations = 3
+early_stop_threshold = 0.01
+```
+
+## Genome Analysis
+
+Next, let's analyze the obtained best genome. The following is based on one of my test datasets.
+
+This is a genome obtained after training. The model terminated at generation 16 due to early stopping:
+
+```python
+[2.5638819522632654, 0.30592210650063667, -1.1848400755378474, 
+ 4.178412919525965, -1.4191214580170772, -0.09006199513519475]
+```
+
+### Performance Analysis of Evolution Methods
+
+```
+island method: average fitness = 49.33, max fitness = 49.90, 
+               improvement rate = 0.14%, usage count = 6
+standard method: average fitness = 49.50, max fitness = 50.30, 
+                 improvement rate = 4.27%, usage count = 9
+```
+
+This indicates that both standard genetic algorithm and island model evolution are effective.
+
+I conducted multiple tests, and it's not certain which method has higher improvement rate, indicating that for different genomes and different test sets, different models are suitable. Moreover, the island model does not show clear superiority in this problem.
+
+The final improvement rates are all relatively low, indicating that the first generation genome already performed well (this is also related to using warm start).
+
+### Feature Weight Analysis
+
+```
+Genome Feature Weights:
+Current score: 2.5639
+Removed length: 0.3059
+New length: -1.1848
+Future score: 4.1784
+Sum of new A elements: -1.4191
+Value ratio of played card to remaining cards in B: -0.0901
+```
+
+Returning to the genome itself, analyzing the weights of its final features:
+
+#### Feature 1: Current Score (2.5639)
+This weight is very high and positive, indicating that the algorithm highly values the score that can be directly obtained from the current operation.
+
+#### Feature 2: Removed Length After Matching at This Position (0.3059)
+This weight is a low positive value, indicating that the algorithm tends to remove fewer elements. This suggests the algorithm tends to avoid removing too many elements. This may be because retaining more elements can provide more possibilities for future moves.
+
+#### Feature 3: New Length (-1.1848)
+Negative value, indicating the algorithm tends to obtain a shorter new A after insert-match operation. This seems to align with the tendency of Feature 2's weight.
+
+>Although the values of Feature 2 and Feature 3 can be obtained through simple mathematical calculation (length of new A = length of old A - length removed due to matching), I cannot guarantee that the AI algorithm can detect this relationship. Moreover, these two states represent different perspectives, so I prefer to retain them. This feature may bring performance improvement or accelerate model convergence.
+
+#### Feature 4: Future Score (4.1784)
+This weight is very high and positive, indicating that the algorithm highly values the impact of moves on possible future scores, demonstrating strong foresight.
+
+#### Feature 5: Sum of Elements in New A (-1.4191)
+The weight is a relatively high negative value, possibly indicating that the algorithm not only considers current score, but also that retaining fewer scoring possibilities may allow subsequent operations to gain advantages.
+
+#### Feature 6: Value Ratio of Moved Card to Remaining Cards in B (-0.0901)
+This feature indicates whether the algorithm tends to play high-value cards first or low-value cards first. The data this time shows a weight close to 0, with very small impact. However, in some tests, this value is less than -1, indicating this feature may achieve some balance with other features.
+
+## Next Steps
+
+Then we need to evaluate our genetic algorithm and obtained genome under given real A and B. However, this part will be placed later and evaluated together with the transformer model.

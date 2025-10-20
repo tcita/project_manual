@@ -927,46 +927,74 @@ def GA_Strategy(genome, A, B):[code_path](https://github.com/tcita/python_server
 
 evaluate_genome(genome, num_rounds, seed_base)[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py#L178))
 """
-用同一批种子生成的A,B,和基因,调用GA_Strategy函数完成从A,B和基因到对应的具体策略的转换
+    调用GA_Strategy函数完成从A,B和基因到对应的具体策略的转换,我们需要用同一批A,B进行对基因的评估 故需要使用一个固定的seedbase
+    使用calculate_score_by_strategy函数[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py#L374)进行策略的实际得分计算,评估多次,取得分的平均值作为最后的评估结果
 
+    Args:
+        genome (list[float]): 待评测基因
+        num_rounds (int): 评估轮数
+        seed_base (int): 用于生成A,B的种子基准
 
+    Returns:
+        float: 该基因的平均评测得分
 
-使用calculate_score_by_strategy函数[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py#L374)进行策略的实际得分计算,评估多次,取得分的平均值
 """
 ```
 
 
-岛与进化模型函数:
+岛屿进化模型函数:
 island_model_evolution(population, fitnesses, pop_size, tournament_size, mutation_strength,
-                           num_rounds, islands=3, migration_rate=0.1,
+                           num_rounds, islands, migration_rate,
                            generation=0, max_generations=60)[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py#L267))
 """
-将所有种群均匀分布在3个岛屿中
-各个岛屿独立进化,调用基因评估函数evaluate_genome计算适应度,保留当前岛屿中适应度最高的 10% 个体，直接进入下一代
+1.将所有种群均匀分布在3个岛屿中
+2.各个岛屿独立进化,调用基因评估函数evaluate_genome计算适应度,保留当前岛屿中适应度最高的 10% 个体，直接进入下一代
+3.用锦标赛选出优胜个体,在其中随机选择父代,进行交叉和变异,生成子代,从这些优秀子代随机选择,替换另一个岛屿适应度低的子代
 
 
-每个岛屿随机选择个体进行迁移，替换目标岛屿中适应度最差的个体。
-返回由于岛屿模型进化得到的新的种群
+    参数：
+    - population: 当前种群 (list)
+    - fitnesses: 当前种群的适应度值 (list)
+    - pop_size: 总种群规模 (int)
+    - tournament_size: 锦标赛选择规模 (int)
+    - mutation_strength: 变异强度 (float)
+    - islands: 岛屿数量 (int)
+    - migration_rate: 迁移率 (float)
+
+    返回：
+    - new_population: 进化后的所有岛屿的种群 (list)
+    
 """
 ```
 
 
-
-
-```python
-###遗传算法训练主函数  
-genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tournament_size,
-                      evolution_methods,
-                      early_stop_generations, early_stop_threshold)(实现见code_path)
-
-根据以上遗传算法有关过程训练,返回得到的最佳基因组
-```
-
-
-```python
 #### 训练参数
 
-遗传算法的实际参数 经过测试,这些参数已经能足够好的结果了:
+调用遗传算法主函数
+genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tournament_size,
+                      evolution_methods,
+                      early_stop_generations, early_stop_threshold)[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py#L457))
+
+    """
+    遗传算法主函数
+
+    参数：
+    - pop_size: 种群大小
+    - generations: 最大进化代数
+    - num_rounds: 评估每个基因组的回合数
+    - elitism_ratio: 精英比例
+    - tournament_size: 锦标赛选择规模
+
+    - evolution_methods: 可用的进化方法列表
+    - method_probs: 各进化方法的使用概率
+    - early_stop_generations: 早停的连续代数
+    - early_stop_threshold: 早停的改善阈值
+
+    返回：
+    - best_genome: 最佳基因组
+    """
+
+ 经过测试,这些参数已经能足够好的结果了:
 
     pop_size=500
     generations=25
@@ -977,10 +1005,9 @@ genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tournament_s
 
     early_stop_generations=3
     early_stop_threshold=0.01
-   
-    genome = genetic_algorithm(pop_size,generations, num_rounds, elitism_ratio, tournament_size, evolution_methods, early_stop_generations, early_stop_threshold)  
+    
 
-```
+
 
 #### 基因分析
 接着我们来分析一下得到的最佳基因 以下基于我的一个测试数据
@@ -991,8 +1018,6 @@ genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, tournament_s
 ```
 [2.5638819522632654, 0.30592210650063667, -1.1848400755378474, 4.178412919525965, -1.4191214580170772, -0.09006199513519475]
 
-
-
 各进化方法性能分析:
 
 island方法: 平均适应度=49.33, 最大适应度=49.90, 改进率=0.14%, 使用次数=6
@@ -1002,7 +1027,7 @@ standard方法: 平均适应度=49.50, 最大适应度=50.30, 改进率=4.27%, �
 
 我进行过多次测试,两种方法不一定哪个改进率高,说明对于不同基因组,不同的测试集,适用的模型不同,并且岛屿模型在这个问题里并没有明显的优越性
 
-最终改进率都较低,说明第一代基因表现的已经不错了(这和温启动也有关)
+最终改进率都较低,说明第一代基因表现的已经不错了(这和使用了温启动也有关)
 
 ```
 
@@ -1040,7 +1065,7 @@ standard方法: 平均适应度=49.50, 最大适应度=50.30, 改进率=4.27%, �
 
 
 
-然后要调用接口(GA_strategy)来测试  在给定真实的A,B的情况下,评估我们的遗传算法和得到的基因 但是这一部分会放到后面,和transformer一起评测
+然后要在给定真实的A,B的情况下,评估我们的遗传算法和得到的基因 但是这一部分会放到后面,和transformer一起评测
 
 
 

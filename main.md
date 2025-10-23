@@ -1072,7 +1072,7 @@ standard方法: 平均适应度=49.50, 最大适应度=50.30, 改进率=4.27%, �
 
 ### 2.2 transformer模型算法的实现
 
-我使用了标准的transformer模型,训练时会输入A,B,以及best_moves  在预测时,A,B是输入特征, best_move是目标,用于计算损失函数，指导模型优化(监督学习的目标标签)
+我使用了标准的transformer模型,训练时会输入A,B,以及best_moves  在预测时,A,B是输入特征, best_move是目标,用于计算损失函数，指导模型优化(即监督学习的目标标签)
 
 
 这个transformer的训练,我一开始尝试过较精简的实现  但是出现了收敛过慢,梯度爆炸,无法灵活的手动停止训练等等问题  所以除了早停和梯度裁剪之外,我加入了学习率预热,余弦退火,优雅退出*/信号处理,来在不破坏性能的前提下加速训练
@@ -1081,55 +1081,170 @@ standard方法: 平均适应度=49.50, 最大适应度=50.30, 改进率=4.27%, �
 >*:(优雅退出在最开始探索训练参数大概范围时有很大的帮助,比如loss足够小了我就可以手动停止训练,继续训练不但费时,而且有梯度爆炸的风险 此时获取够好的临时模型再分析,可以用于推断更好的参数范围  虽然在最佳训练参数基本确定后就不需要手动停止,优雅退出也没什么作用了)
 
 
-### transformer模型框架概述
+### 部分核心函数说明
 
 
 
  数据准备与特征工程
-```python
+
     prepare_data_transformer(sample, num_a=6, num_b=3) 函数:
-        关键的数据预处理和特征构建步骤。
-        将原始的 A、B 序列和对应的 best_moves 转换为模型训练所需的格式。
+```        
+        负责数据预处理和特征工程
 
-        特征工程 (input_dim=6): 为A和B序列中的每个元素创建6个特征。
+        特征工程为A和B序列中的每个元素创建6个特征(与遗传算法使用的相同)。
+        之后将原始的 A、B 序列和对应的 best_moves 添加特征后,一起打包转换为模型训练所需的格式并返回。
 
-  
+        
 
-        输出：input_sequence (形状 (9, 6)) 和对应的 order_target、pos_target 标签。
+     参数:
+        sample (dict): 包含 A、B 序列和 best_moves 的一条样本。
+        num_a (int): A序列的长度。
+        num_b (int): B序列的长度。
+
+    返回值：input_sequence (形状 (9, 6)) 和对应的 order_target、pos_target 标签。
 ```
 
- 
-
-训练主流程
-
-```python 
 
 
-        总控模型训练过程。
-        初始化: 模型 (TransformerMovePredictor)、AdamW 优化器。
-        损失函数:
-            order_criterion (nn.CrossEntropyLoss): 用于B序列顺序预测。
-            pos_criterion (nn.MSELoss): 用于B序列元素位置预测。
-        学习率策略:
-            lr_warmup: 训练初期学习率线性预热。
-            CosineAnnealingLR: 预热后使用余弦退火策略调整学习率。
-        训练循环:
-            数据打乱与批处理。
-            调用 prepare_data_transformer 处理每个批次的数据。
-            前向传播、计算总损失 (顺序损失 + 位置损失)。
-            反向传播、梯度裁剪、优化器更新参数。
-        早停机制: 若连续多个 epoch 损失无明显改善，则提前终止训练，并保存最佳模型。
-        模型保存: 训练结束或中断时，保存模型状态字典到 .pth 文件。
-    signal_handler(...): 允许通过 Ctrl+C 安全中断训练并保存模型。
-```
+class TransformerMovePredictor(nn.Module)
+"""
+训练好的模型就是一个TransformerMovePredictor类的实例,训练会改变它的所有神经网络层的权重和偏置,然后使用两个预测头,返回预测B中元素的操作顺序 和 代表每个 B 元素预测要插入的A的哪个位置
 
- 模型预测与后处理
 
-```python
-    Transformer_predict(A, B, model) 函数:
-               
-     预测并返回最佳策略列表, 预测得分
-```
+
+    输入 (src):
+
+        一个形状为 (batch_size, 9, input_dim) 的张量。
+
+        序列长度固定为9，前6个元素代表A部分的上下文，后3个元素代表B部分的目标。
+
+        input_dim 是每个元素的特征维度。
+
+    输出 (Output):
+
+        一个包含两个张量的元组 (order_logits, pos_preds)。
+
+            order_logits: 形状为 (batch_size, 3, 3) 的张量，用于预测B内部的相对顺序。
+
+            pos_preds: 形状为 (batch_size, 3) 的张量，用于预测B中每个元素的位置。
+ """
+
+
+
+Transformer_predict(A, B, model, num_a=6, num_b=3)
+"""
+    使用训练好的 Transformer 模型进行预测 (针对 A=6, B=3)。
+    
+    这里使用了一个启发式的判断 如果A和B没有交集，且B中没有重复元素  说明无法得分 这时候不需要进行预测,直接返回默认移动策略(事实上训练模型时，已经跳过了A,B没有交集的样本)  
+    A和B没有交集无法得分很好理解 对于AB没有交集,且B中如果有重复元素 b1=b2,那么b1与b2可以分别插到A中,匹配规则依然成立,甚至如果b1插入A的第一个位置,b2插入最后一个位置 能获得sum(A)+sum(B)的得分
+
+    参数:
+        A (numpy.ndarray): A序列的数组。
+        B (numpy.ndarray): B序列的数组。
+        model (nn.Module): 训练好的 Transformer 模型。 
+        num_a (int): A序列的长度。
+        num_b (int): B序列的长度。
+
+    返回值: (最佳策略列表, 预测得分)
+"""
+
+transformer位置编码
+
+class PositionalEncoding(nn.Module):
+
+    """
+    将输入的词嵌入向量与从缓冲区中取出的、长度匹配的位置编码向量相加，再返回dropout层的处理结果,而为模型注入关键的序列顺序信息 
+
+    该模块不作为模型参数进行学习，而是使用固定的正弦和余弦函数来生成。
+
+        Args:
+        d_model (int): 模型的维度（即词嵌入的维度）。
+        dropout (float): Dropout 的概率，默认为 0.1。
+        max_len (int): 支持的最大序列长度，默认为 5000。
+
+    Shape:
+        - Input: `(batch_size, seq_len, d_model)`
+        - Output: `(batch_size, seq_len, d_model)`
+    """
+
+我对正余弦函数的选择原因进行了一些思考
+            
+已知位置编码中的角度项定义为：
+
+$$
+\theta_{\text{pos}, i} = \text{pos} \cdot 10000^{-2i / d_{\text{model}}} 
+$$
+
+那么$\omega_i = 10000^{-2i/d_{\text{model}}}$, $\theta_{\text{pos}, i} = \text{pos} \cdot \omega_i$
+
+1. 该角度项构成一个二维矩阵，可以证明该设计呈现出**多尺度频率特性**：
+
+- **沿位置方向（行）**：  
+  对于固定的频率维度索引 $i$，$\theta_{\text{pos}, i}$ 随位置索引 $\text{pos}$ 线性增长。  
+  - 当 $i$ 较小（对应编码向量的低维部分）时，衰减因子 $10000^{-2i / d_{\text{model}}} \approx 1$，增长斜率较大，对应的 $\sin(\theta)$ 和 $\cos(\theta)$ 函数振荡频率高，能够精细区分相邻位置。  
+  - 当 $i$ 较大（对应高维部分）时，衰减因子显著小于 1，$\theta$ 增长缓慢，正余弦函数变化平缓，编码的是长距离、粗粒度的全局位置信息。
+
+- **沿维度方向（列）**：  
+  对于固定的位置 $\text{pos}$，$\theta_{\text{pos}, i}$ 随维度索引 $i$ 的增加而**指数衰减**，因为  
+  $$
+  10000^{-2i / d_{\text{model}}} = \exp\left(-\frac{2i}{d_{\text{model}}} \ln 10000\right)
+  $$  
+  是一个关于 $i$ 的指数衰减函数。
+
+这样的设计能同时捕捉局部细节和全局结构信息，提升模型对不同尺度特征的表达能力，从而增强对复杂模式的建模效果。
+
+
+2.  **相对位置的线性可表示性 :**
+正余弦函数对于任何固定的偏移量 `k`，`PE(pos+k)`
+都可以表示为 `PE(pos)` 的一个线性变换（具体为一个旋转矩阵）。
+
+正余弦位置编码将每对维度 $(2i, 2i+1)$ 编码为：
+
+$$
+\mathbf{p}_{\text{pos}}^{(i)} = 
+\begin{bmatrix}
+\sin(\text{pos} \cdot \omega_i) \\
+\cos(\text{pos} \cdot \omega_i)
+\end{bmatrix}.
+$$
+
+对于相对偏移 $k$，有：
+
+$$
+\begin{bmatrix}
+\sin((\text{pos}+k)\omega_i) \\
+\cos((\text{pos}+k)\omega_i)
+\end{bmatrix}
+=
+\underbrace{
+\begin{bmatrix}
+\cos(k\omega_i) & \sin(k\omega_i) \\
+-\sin(k\omega_i) & \cos(k\omega_i)
+\end{bmatrix}
+}_{\mathbf{R}(k\omega_i)^\top}
+\begin{bmatrix}
+\sin(\text{pos}\omega_i) \\
+\cos(\text{pos}\omega_i)
+\end{bmatrix}.
+$$
+
+即位置 $\text{pos}+k$ 的编码向量可由位置 $\text{pos}$ 的编码向量通过左乘 $\mathbf{R}(k\omega_j)^\top$ 得到，其中  
+> $$
+> \mathbf{R}(\theta) = 
+> \begin{bmatrix}
+> \cos\theta & -\sin\theta \\
+> \sin\theta & \cos\theta
+> \end{bmatrix}
+> $$
+> 是标准二维旋转矩阵。
+
+
+这使得模型能够非常容易地学习到关注相对位置关系，因为注意力机制本质上就是计算点积，
+而线性变换在点积运算中表现良好。
+
+所以交替使用 sin 和 cos 函数，有助于自注意力机制能够轻松地学习到理解“向后移动k个位置”或者“向前移动k个位置”这种相对关系信息
+
+
 
 
 ## 特征工程策略
@@ -1160,39 +1275,29 @@ standard方法: 平均适应度=49.50, 最大适应度=50.30, 改进率=4.27%, �
 这和GA的动态特征计算不同,这里的特征只对初始的A,B计算一次 这是一个一次性（One-Shot）预测
 
 
-### transformer核心函数(大多数是transformer的标准实现):
-
-PositionalEncoding类 (实现见code_path)
-将输入的词嵌入向量与从缓冲区中取出的、长度匹配的位置编码向量相加，再返回dropout层的处理结果,而为模型注入关键的序列顺序信息 
-
-TransformerMovePredictor类 (实现见code_path)
-训练好的模型就是一个TransformerMovePredictor类的实例,训练会改变它的所有神经网络层的权重和偏置,然后使用两个预测头,返回预测B中元素的操作顺序 和 代表每个 B 元素预测要插入的A的哪个位置
-
-
-prepare_data_transformer(sample: dict, num_a=6, num_b=3) (实现见code_path)
-    负责数据预处理和特征工程
-    将原始的 A、B 序列和对应的 best_moves 添加特征后,一起打包转换为模型训练所需的格式并返回。
-
-       
-
-Transformer_predict(A, B, model, num_a=6, num_b=3) (实现见code_path)
-
-    使用训练好的 Transformer 模型进行预测 (针对 A=6, B=3)。
-    
-    返回值: (最佳策略列表, 预测得分)
-    这里使用了一个启发式的判断 如果A和B没有交集，且B中没有重复元素  说明无法得分 这时候不需要进行预测,直接返回默认移动策略(事实上训练模型时，已经跳过了A,B没有交集的样本)  
-    
-    A和B没有交集无法得分很好理解 对于AB没有交集,且B中如果有重复元素 b1=b2,那么b1与b2可以分别插到A中,匹配规则依然成立,甚至如果b1插入A的第一个位置,b2插入最后一个位置 能获得sum(A)+sum(B)的得分
-
-
-
-
 训练主函数:
 
-train_model(train_data, epochs, batch_size, model_path="transformer.pth",
+train_model(train_data, epochs, batch_size, model_path,
                 num_a=6, num_b=3, warmup_epochs, lr_max, lr_min,
                 patience, min_delta)  (实现见code_path)
-
+```
+        总控模型训练过程。
+        初始化: 模型 (TransformerMovePredictor)、AdamW 优化器。
+        损失函数:
+            order_criterion (nn.CrossEntropyLoss): 用于B序列顺序预测。
+            pos_criterion (nn.MSELoss): 用于B序列元素位置预测。
+        学习率策略:
+            lr_warmup: 训练初期学习率线性预热。
+            CosineAnnealingLR: 预热后使用余弦退火策略调整学习率。
+        训练循环:
+            数据打乱与批处理。
+            调用 prepare_data_transformer 处理每个批次的数据。
+            前向传播、计算总损失 (顺序损失 + 位置损失)。
+            反向传播、梯度裁剪、优化器更新参数。
+        早停机制: 若连续多个 epoch 损失无明显改善，则提前终止训练，并保存最佳模型。
+        模型保存: 训练结束或中断时，保存模型状态字典到 .pth 文件。
+    signal_handler(...): 允许通过 Ctrl+C 安全中断训练并保存模型。
+```
 
 以下是实际调用的参数(patience=2看似激进,但是它经过测试是合适的值)
 
@@ -1201,9 +1306,7 @@ train_model(train_data, epochs, batch_size, model_path="transformer.pth",
                 num_a=6, num_b=3, warmup_epochs=5, lr_max=0.0005, lr_min=0.0000001,
                 patience=2, min_delta=0.01)
 
-在Epoch =12, LR: 0.0000001 时,由于早停终止训练 Average Loss约为 0.04
-
-transformer生成的pth格式模型有很强的黑箱性质 所以这里我们不直接分析它
+根据我的实际训练结果,在Epoch =12, LR: 0.0000001 时,由于早停终止训练 Average Loss约为 0.04
 
 
 现在我们完成了遗传算法和transformer 的训练  接着我们要来比较这两个模型得到的结果    

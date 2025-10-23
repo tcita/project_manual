@@ -1075,6 +1075,163 @@ The weight is a relatively high negative value, possibly indicating that the alg
 #### Feature 6: Value Ratio of Moved Card to Remaining Cards in B (-0.0901)
 This feature indicates whether the algorithm tends to play high-value cards first or low-value cards first. The data this time shows a weight close to 0, with very small impact. However, in some tests, this value is less than -1, indicating this feature may achieve some balance with other features.
 
-## Next Steps
 
 Then we need to evaluate our genetic algorithm and obtained genome under given real A and B. However, this part will be placed later and evaluated together with the transformer model.
+
+
+### 2.2 Implementation of the Transformer Model Algorithm
+
+I employed a standard Transformer model. During training, the inputs are $A$, $B$, and $best\_moves$. During inference, $A$ and $B$ serve as input features, while $best\_move$ acts as the target label for computing the loss function, thereby guiding model optimization (i.e., the supervised learning target).
+
+Initially, I attempted a more streamlined implementation of this Transformer training, but encountered issues such as slow convergence, gradient explosion, and the inability to flexibly terminate training manually. Consequently, in addition to early stopping and gradient clipping, I incorporated learning rate warm-up, cosine annealing, and graceful shutdown with signal handling to accelerate training without compromising performance.
+
+> *: Graceful shutdown proved especially helpful during the initial exploration phase for roughly estimating the training parameter ranges. For instance, once the loss became sufficiently small, I could manually stop training—continuing would not only waste time but also risk gradient explosion. At that point, obtaining a reasonably good temporary model allowed further analysis to infer better parameter ranges. Although once the optimal training parameters were largely determined, manual interruption became unnecessary and graceful shutdown lost its utility.*
+
+### Explanation of Key Functions
+
+#### Data Preparation and Feature Engineering
+
+```python
+prepare_data_transformer(sample, num_a=6, num_b=3)
+```
+- **Purpose**: Handles data preprocessing and feature engineering.
+- **Feature Engineering**: For each element in sequences $A$ and $B$, six features are created (identical to those used in the genetic algorithm).
+- After feature augmentation, the original $A$, $B$ sequences, and corresponding $best\_moves$ are packed together into the format required for model training and returned.
+- **Parameters**:
+  - `sample` (dict): A single data sample containing sequences $A$, $B$, and $best\_moves$.
+  - `num_a` (int): Length of sequence $A$.
+  - `num_b` (int): Length of sequence $B$.
+- **Returns**: `input_sequence` (shape $(9, 6)$) along with corresponding `order_target` and `pos_target` labels.
+
+---
+
+```python
+class TransformerMovePredictor(nn.Module)
+```
+- A trained model is an instance of the `TransformerMovePredictor` class. Training updates the weights and biases of all neural network layers. The model uses two prediction heads to output:
+  1. The predicted insertion order of elements in $B$,
+  2. The predicted insertion positions in $A$ for each element of $B$.
+
+- **Input (`src`)**:
+  - A tensor of shape $(batch\_size, 9, input\_dim)$.
+  - Sequence length is fixed at 9: the first 6 elements represent contextual information from $A$, and the last 3 represent target elements from $B$.
+  - $input\_dim$ denotes the feature dimensionality of each element.
+
+- **Output**:
+  - A tuple `(order_logits, pos_preds)`:
+    - `order_logits`: Tensor of shape $(batch\_size, 3, 3)$, used to predict the relative order among elements in $B$.
+    - `pos_preds`: Tensor of shape $(batch\_size, 3)$, used to predict the insertion position in $A$ for each element of $B$.
+
+---
+
+```python
+Transformer_predict(A, B, model, num_a=6, num_b=3)
+```
+- Performs prediction using a trained Transformer model (specifically for $|A|=6$, $|B|=3$).
+- Employs a heuristic check: if $A$ and $B$ are disjoint and $B$ contains no duplicate elements, scoring is impossible. In such cases, prediction is skipped and a default move strategy is returned directly. (Note: during training, samples where $A$ and $B$ are disjoint were already excluded.)
+- Intuition: If $A \cap B = \emptyset$ and $B$ has no duplicates, no matches can be formed. However, if $B$ contains duplicates (e.g., $b_1 = b_2$), each copy can be inserted into different positions in $A$, potentially achieving a maximum score of $\text{sum}(A) + \text{sum}(B)$.
+
+- **Parameters**:
+  - `A` (numpy.ndarray): Array representing sequence $A$.
+  - `B` (numpy.ndarray): Array representing sequence $B$.
+  - `model` (nn.Module): Trained Transformer model.
+  - `num_a` (int): Length of sequence $A$.
+  - `num_b` (int): Length of sequence $B$.
+
+- **Returns**: (List of best move strategies, predicted score)
+
+---
+
+#### Positional Encoding in Transformer
+
+```python
+class PositionalEncoding(nn.Module)
+```
+- Adds positional encoding vectors (retrieved from a precomputed buffer) to the input token embeddings, then applies dropout. This injects crucial sequential order information into the model.
+- The positional encodings are **not learned parameters**; instead, they are generated using fixed sine and cosine functions.
+
+- **Args**:
+  - `d_model` (int): Dimensionality of the model (i.e., embedding dimension).
+  - `dropout` (float): Dropout probability (default: 0.1).
+  - `max_len` (int): Maximum supported sequence length (default: 5000).
+
+- **Output**:
+    $(batch\_size, seq\_len, d\_model)$
+
+I have reflected on the rationale behind choosing sine and cosine functions for positional encoding.
+
+In the standard positional encoding, the angular term is defined as:
+
+$$
+\theta_{\text{pos}, i} = \text{pos} \cdot 10000^{-2i / d_{\text{model}}}
+$$
+
+Thus, $\omega_i = 10000^{-2i / d_{\text{model}}}$, and $\theta_{\text{pos}, i} = \text{pos} \cdot \omega_i$.
+
+1. **Multi-scale Frequency Characteristics**
+
+The angular term forms a 2D matrix, and this design inherently exhibits **multi-scale frequency characteristics**:
+
+- **Along the position dimension (rows)**:  
+  For a fixed frequency index $i$, $\theta_{\text{pos}, i}$ grows linearly with the position index $\text{pos}$.  
+  - When $i$ is small (corresponding to lower dimensions of the encoding vector), the decay factor $10000^{-2i / d_{\text{model}}} \approx 1$, resulting in a large slope. Consequently, $\sin(\theta)$ and $\cos(\theta)$ oscillate rapidly, enabling fine-grained discrimination between adjacent positions.  
+  - When $i$ is large (corresponding to higher dimensions), the decay factor becomes significantly smaller than 1, causing $\theta$ to increase slowly. The sine and cosine functions thus vary smoothly, encoding coarse-grained, long-range global positional information.
+
+- **Along the embedding dimension (columns)**:  
+  For a fixed position $\text{pos}$, $\theta_{\text{pos}, i}$ **decays exponentially** as the dimension index $i$ increases, because
+  $$
+  10000^{-2i / d_{\text{model}}} = \exp\left(-\frac{2i}{d_{\text{model}}} \ln 10000\right)
+  $$
+  is an exponential decay function with respect to $i$.
+
+This design enables the model to simultaneously capture both local details and global structural information, enhancing its capacity to represent features at multiple scales and thereby improving its ability to model complex patterns.
+
+2. **Linear Representability of Relative Positions**
+
+For any fixed offset $k$, the positional encoding at position $\text{pos} + k$, denoted $PE(\text{pos} + k)$, can be expressed as a **linear transformation** of $PE(\text{pos})$—specifically, a rotation matrix.
+
+The sine-cosine positional encoding assigns to each pair of dimensions $(2i, 2i+1)$ the vector:
+
+$$
+\mathbf{p}_{\text{pos}}^{(i)} = 
+\begin{bmatrix}
+\sin(\text{pos} \cdot \omega_i) \\
+\cos(\text{pos} \cdot \omega_i)
+\end{bmatrix}.
+$$
+
+For a relative offset $k$, we have:
+
+$$
+\begin{bmatrix}
+\sin((\text{pos}+k)\omega_i) \\
+\cos((\text{pos}+k)\omega_i)
+\end{bmatrix}
+=
+\underbrace{
+\begin{bmatrix}
+\cos(k\omega_i) & \sin(k\omega_i) \\
+-\sin(k\omega_i) & \cos(k\omega_i)
+\end{bmatrix}
+}_{\mathbf{R}(k\omega_i)^\top}
+\begin{bmatrix}
+\sin(\text{pos}\omega_i) \\
+\cos(\text{pos}\omega_i)
+\end{bmatrix},
+$$
+
+where  
+$$
+\mathbf{R}(\theta) = 
+\begin{bmatrix}
+\cos\theta & -\sin\theta \\
+\sin\theta & \cos\theta
+\end{bmatrix}
+$$
+is the standard 2D rotation matrix.
+
+This means the encoding at position $\text{pos} + k$ can be obtained by left-multiplying the encoding at position $\text{pos}$ with $\mathbf{R}(k\omega_i)^\top$.
+
+Because the self-attention mechanism fundamentally computes dot products, and dot products are well-behaved under linear transformations, this property allows the model to **easily learn relative positional relationships**.
+
+Therefore, the alternating use of sine and cosine functions enables the self-attention mechanism to effortlessly capture and reason about relative positional information—such as “shift $k$ positions forward” or “shift $k$ positions backward.”

@@ -1089,6 +1089,8 @@ Initially, I attempted a more streamlined implementation of this Transformer tra
 
 ### Explanation of Key Functions
 
+[source code] (https://github.com/tcita/python_server/blob/master/AI_algorithm/Trans.py)
+
 #### Data Preparation and Feature Engineering
 
 ```python

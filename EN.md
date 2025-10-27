@@ -1237,3 +1237,650 @@ This means the encoding at position $\text{pos} + k$ can be obtained by left-mul
 Because the self-attention mechanism fundamentally computes dot products, and dot products are well-behaved under linear transformations, this property allows the model to **easily learn relative positional relationships**.
 
 Therefore, the alternating use of sine and cosine functions enables the self-attention mechanism to effortlessly capture and reason about relative positional information—such as “shift $k$ positions forward” or “shift $k$ positions backward.”
+
+### Feature Engineering 
+
+Features for Sequence A (Target Sequence)
+
+```
+For each element a (number) in A:
+[
+  Ratio of a to the sum of all elements in A,
+  Whether it is an extreme value (min/max),
+  Standardized value of a,
+  Standardized value of a,
+  Normalized value of a,
+  Ratio of intersection size between A and B to the number of elements in A
+]
+```
+
+**Standardized Value**: Reflects the difference between the value of $a$ and the mean of $A$
+
+**Normalized Value**: Between 0-1, directly reflects the numerical value of $a$
+
+Features for Sequence B (Insertion Sequence)
+
+For each element $b$ in B:
+```
+[
+  Ratio of b to the sum of all elements in B,
+  Ratio of future score to (sum of A + sum of B),
+  Whether b exists in A (intersection),
+  Relative position of b in A (if no intersection, -0.1),
+  Ratio of duplicate elements in B to all B elements,
+  Whether it is an extreme value (min/max)
+]
+```
+
+Output Results
+
+After training, a `.pth` file is generated containing the trained weights of the `TransformerMovePredictor` model, which can be used for subsequent strategy prediction.
+
+This differs from GA's dynamic feature calculation; here, features are computed only once for the initial A and B. This is a **one-shot prediction**.
+
+---
+
+### Main Training Function
+
+```python
+train_model(train_data, epochs, batch_size, model_path,
+            num_a=6, num_b=3, warmup_epochs, lr_max, lr_min,
+            patience, min_delta)  # (Implementation details in code_path)
+```
+
+### Function Description:
+
+```
+Main control of the model training process.
+
+Initialization:
+    - Model: TransformerMovePredictor
+    - Optimizer: AdamW
+
+Loss Functions:
+    - order_criterion (nn.CrossEntropyLoss): Used for B sequence order prediction
+    - pos_criterion (nn.MSELoss): Used for B sequence element position prediction
+
+Learning Rate Strategy:
+    - lr_warmup: Linear warmup of learning rate at the beginning of training
+    - CosineAnnealingLR: After warmup, uses cosine annealing strategy to adjust learning rate
+
+Training Loop:
+    - Data shuffling and batching
+    - Calls prepare_data_transformer to process each batch of data
+    - Forward propagation, compute total loss (order loss + position loss)
+    - Backpropagation, gradient clipping, optimizer updates parameters
+
+Early Stopping:
+    If loss shows no significant improvement for consecutive epochs, 
+    training terminates early and saves the best model.
+
+Model Saving:
+    Upon training completion or interruption, saves model state dict to .pth file.
+
+signal_handler(...): 
+    Allows safe interruption of training via Ctrl+C and saves the model.
+```
+
+---
+
+### Actual Call Parameters
+
+```python
+train_model(
+    train_data, 
+    epochs=100,           # Maximum training epochs
+    batch_size=2048,      # Batch size
+    model_path=".../transformer_move_predictor.pth",  # Model save path
+    num_a=6,              # Length of sequence A
+    num_b=3,              # Length of sequence B
+    warmup_epochs=5,      # Warmup epochs
+    lr_max=0.0005,        # Maximum learning rate
+    lr_min=0.0000001,     # Minimum learning rate
+    patience=2,           # Early stopping patience
+    min_delta=0.01        # Minimum improvement threshold
+)
+```
+
+**Note**: `patience=2` seems aggressive, but it has been tested and is an appropriate value.
+
+---
+
+### Training Results
+
+According to my actual training results:
+
+- At **Epoch = 12**, **LR: 0.0000001**, training terminated due to early stopping
+  
+- **Average Loss $\approx$ 0.04**
+
+---
+
+### Next Steps
+
+Now that we have completed the training of both the **Genetic Algorithm (GA)** and the **Transformer**, we will proceed to **compare the results obtained from these two models**.
+
+## Evaluation Process Introduction
+
+
+I evaluate the two models as follows:
+
+The entire evaluation process is driven by the core function `Compare_TwoModel(model, other_model, rounds)` (implementation in [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/two_model_comparing.py#L130)), which can be broken down into the following key steps:
+
+### 1. Initialization and Loop Testing
+
+- **Set test rounds**: The function receives a `rounds` parameter that determines how many independent tests to perform. Here, the number of tests is **20,000**.
+- **Loop to generate test cases**: In each iteration, a new set of test data `A` and `B` is generated through the `deal_cards_tool()` function (implementation in [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py#L125)). The data in each round is randomly independent, ensuring the generalization ability of the model evaluation.
+
+### 2. Model Prediction and Performance Recording
+
+For each round of generated `A` and `B`:
+
+### Call models to obtain strategies:
+- The `TestModel_with_given_A_B(model, A, B)` function (implementation in [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/two_model_comparing.py#L61)) is used separately to test the genome model and the Transformer model.
+- Inside this function, each model predicts the best three-step operation strategy `move` based on the current state of `A` and `B`. This `move` defines which card from `B` should be played first and at which position in `A` it should be inserted.
+
+### Calculate true score:
+- The model returns only the strategy (`move`) it considers best, **not the score predicted by the model itself**.
+- Using the `strategy_TrueScore(A, B, move)` function (implementation in code_path), which is a function that calculates the score based on the move, the entire card-playing process is simulated step by step according to the move returned by the model, and the **actual total score** that this strategy can achieve is calculated.
+
+### Record runtime:
+- The `TestModel_with_given_A_B` function precisely records the time each model takes from receiving data to returning a strategy, used to evaluate the computational efficiency of the model.
+
+### 3. Obtaining "Ground Truth"
+
+In each round, the code also calls the previously mentioned `recursive_StrategyAndScore()` function, which uses **exhaustive recursive search** to calculate:
+- The **theoretical maximum score** (`true_score`) achievable under the current combination of `A` and `B`
+- The corresponding **optimal strategy** (`true_move`) that achieves this score
+
+This evaluates both models against the best possible outcome.
+
+### 4. Data Aggregation and Analysis
+
+When all `rounds` are completed, the code collects three core datasets: the score list of the genome model, the score list of the Transformer model, and the list of theoretical maximum scores for each round. Next, detailed data analysis is performed:
+
+### Descriptive Statistics (`compute_statistics`):
+For each model's score list and the ground truth list, basic statistical data is calculated and printed:
+- **Mean**: Average performance of the model
+- **Median**: Typical performance excluding the influence of extreme values
+- **Standard Deviation (std_dev)**: Stability of model performance. Smaller standard deviation indicates more stable model performance
+- **Min/Max**: Upper and lower bounds of model performance
+
+### Mean Squared Error (MSE):
+- Calculates the mean squared error between each model's scores and the true maximum scores
+- MSE effectively measures the magnitude of prediction deviation; smaller values indicate results closer to the optimal solution
+
+### Inferential Statistical Tests (`compute_statistical_tests`):
+
+Analyzes the **bias** between model scores and ground truth.
+
+#### Paired t-test:
+- Used to test whether the difference between "the model's average score" and "the average of ground truth" is **statistically significant**
+- **p-value** is the core metric. If $p < 0.05$, the difference between model scores and ground truth is considered significant, not caused by random factors
+
+#### Effect Size Analysis (Cohen's d):
+- The t-test only tells us whether the difference is "significant," but doesn't indicate how "large" this difference is
+- Cohen's d measures the **actual size or impact degree** of the difference (very small, small, medium, large)
+
+## Visualization Analysis
+
+### 1. Violin Plot
+- **Purpose**: Display the **complete distribution** of three datasets (ground truth, Algorithm 1 scores, Algorithm 2 scores)
+
+### 2. Bias Bar Chart
+- **Purpose**: Observe the bias patterns of models across different score ranges and the number of samples in each score range
+
+The bias bar chart is designed with the y-axis scale aligned with the violin plot. Leveraging the violin plot's characteristic of intuitively displaying the distribution of predicted scores, it becomes easy to visually see the distribution of prediction data falling within a certain score range relative to all prediction data, and to understand the average bias of that score range.
+
+## Dataset Preprocessing: "Padding" and "Skipping" (Ablation Study)
+
+Now we can return to the issue of handling `best_move` entries in the training set that are not strictly length 3. (This arises from exhaustive recursion - for example, after the second operation, no matter how the third card is played, no points can be scored. In this case, the returned `best_move` has length 2 instead of 3. Testing shows that cases where `best_move` length is not strictly 3 account for approximately **10%** of the training set.)
+
+
+Training Set Generation Code"
+
+```python
+def generate_training_data(num_samples=10000):
+    dataset = []
+    for i in range(num_samples):
+        # Initialize A, B
+        A, B = deal_cards_tool()    
+        max_score, best_moves = recursive_StrategyAndScore(A, B)
+        
+        # Ensure that the first element of each of the 3 sub-arrays in the 2D array best_move is distinct
+        # (because only 3 operations can be performed, each can only be 0, 1, or 2, and each operation index is unique)
+        whole = [0, 1, 2]
+        current_rows = set(move[0] for move in best_moves)
+        remaining = [i for i in whole if i not in current_rows]
+        
+        """
+        This uses the "padding" implementation
+        If using the "skipping" strategy, change to: if len(best_moves) != 3: continue
+        """
+        for i in remaining:
+            if len(best_moves) < 3:
+                best_moves.append([i, 0])
+                
+        dataset.append({"A": A, "B": B, "max_score": max_score, "best_moves": best_moves})
+        
+    with open("data.json", "w") as f:
+        json.dump(dataset, f, indent=4)
+
+generate_training_data(num_samples=10000)
+```
+
+Next, we train models separately using the padding/skipping methods and compare them.
+
+**The following data is based on my experimental results.**
+
+---
+
+### Discussion Based on Dataset Preprocessing Using "Padding"
+
+We use this function to generate training sets for both the Genetic Algorithm and Transformer:
+- `data_GA_fill.json`
+- `data_transformer_fill.json`
+
+### Deduplication Processing
+
+**`data_GA_fill.json`**: No duplicate samples found
+
+**`data_transformer_fill.json`**:
+```
+--- Deduplication Results ---
+Original number of records: 5,000,000
+Number of records after deduplication: 4,989,455
+Number of duplicate records removed: 10,545
+Duplication rate: approximately 0.21%
+```
+
+This is extremely small and validates the previously discussed issues in the algorithm section regarding the "massive decision space" and the difficulty of designing caching mechanisms.
+
+Since 5M data is quite large, I converted it to **JSONL format** here, which helps improve efficiency.
+
+Here, **Algorithm 1** represents the Genetic Algorithm model and **Algorithm 2** represents the Transformer model.
+
+Running the comparison function with **5,000 test rounds**, the following statistical data was obtained:
+
+# Statistical Data Comparison Analysis Table
+
+**Test Configuration:** 20,000 test rounds  
+**Comparison Objects:** Algorithm 1 (GA) vs Algorithm 2 (Transformer) vs Ground Truth
+
+---
+
+## Algorithm Performance Comparison
+
+### Table 1: Performance Metrics
+
+| Metric                  | Algorithm 1 (GA) | Algorithm 2 (Transformer) | Ground Truth |
+|------------------------|------------------|---------------------------|--------------|
+| **Average Score**       | 52.52           | 58.71                     | 59.41        |
+| **Median Score**        | 53.00           | 59.00                     | 59.00        |
+| **Score Std Dev**       | 12.88           | 11.76                     | 11.27        |
+| **Minimum Score**       | 4               | 2                         | 23           |
+| **Maximum Score**       | 95              | 96                        | 96           |
+| **Runtime (seconds)**   | 38.38           | 80.71                     | -            |
+| **MSE**                 | 102.3389        | 14.23675                  | -            |
+
+### Table 2: Bias Analysis (Ground Truth - Predicted Value)
+
+| Metric                     | Algorithm 1 (GA) | Algorithm 2 (Transformer) |
+|---------------------------|------------------|---------------------------|
+| **Mean Bias**              | -6.89           | -0.70                     |
+| **Median Bias**            | -5.00           | 0.00                      |
+| **Std Dev Bias**           | 7.40            | 3.71                      |
+| **Minimum Score Bias**     | -42             | -53                       |
+| **Maximum Score Bias**     | 0               | 0                         |
+
+### Table 3: Statistical Tests and Effect Size Analysis
+
+| Metric                     | Algorithm 1 (GA) | Algorithm 2 (Transformer) |
+|---------------------------|------------------|---------------------------|
+| **t-statistic**            | -131.689         | -26.784                   |
+| **p-value**                | 0.000e+00        | 2.679e-155                |
+| **Statistical Significance**| Significant (p < 0.05) | Significant (p < 0.05) |
+| **Cohen's d**              | -0.931           | -0.189                    |
+| **Effect Size**            | Large            | Very Small                |
+
+*All biases are calculated as corresponding ground truth data minus corresponding predicted value data.
+
+---
+
+## Comprehensive Performance Analysis
+
+From the experimental data, **Transformer (Algorithm 2)** significantly outperforms **GA (Algorithm 1)** across multiple key metrics, particularly excelling in prediction accuracy and bias control.
+
+### 1. Prediction Accuracy and Error
+
+- **Mean Squared Error (MSE)**: Transformer's MSE is **14.23**, far lower than GA's **102.33**, indicating that Transformer's predictions are much closer to ground truth with higher accuracy.
+
+- **Bias analysis** further supports this: Transformer's mean bias is only **-0.70**, while GA's mean bias reaches **-6.89**. Additionally, Transformer's median bias is **0.00**, indicating that the distribution center of its predictions is completely aligned with ground truth, whereas GA's median bias is **-5.00**, showing clear systematic bias.
+
+### 2. Computational Efficiency
+
+- In terms of **runtime**, GA's average runtime is **38.38 seconds**, while Transformer's runtime is **80.71 seconds**. The runtime ratio is approximately **1:2.07**. GA's execution speed is significantly faster than Transformer.
+
+### 3. Statistical Significance and Effect Size
+
+- **Paired t-test** results show that differences between both algorithms' predictions and ground truth are statistically significant ($p < 0.05$). However, **effect size analysis (Cohen's d)** reveals the actual magnitude of impact:
+  - GA's Cohen's d is **-0.931**, indicating a large deviation between its predictions and ground truth
+  - Transformer's Cohen's d is only **-0.189**, indicating an extremely small deviation between its predictions and ground truth, which is almost negligible
+
+### 4. Extreme Value Handling
+
+- In predicting **minimum scores**, both algorithms show certain deviations, with Transformer's minimum score bias reaching **-53**, larger than GA's **-42**. This may indicate that Transformer still needs improvement in extreme value prediction. However, both algorithms have **0 bias** for maximum score predictions, suggesting comparable performance in the high-score range.
+
+# Visualization Analysis and Ablation Study Results
+
+## Figure 1 Analysis: Padding Strategy 
+
+![](Figure_1.png)
+### Left Plot: Score Distribution 
+
+This plot displays the overall distribution of ground truth scores and predicted scores from both algorithms.
+
+- **Shape width**: Represents data density at each score level. Wider sections indicate more data points.
+- **Internal box**: The middle horizontal line represents the median, and the box represents the data range from 25% to 75% (interquartile range).
+
+#### Analysis Points:
+
+**Ground Truth:**
+- Score distribution is relatively concentrated between 40-80 points, with a median around 59.
+- This serves as the benchmark; an ideal algorithm should generate a similar distribution.
+
+**Algorithm 1 (GA):**
+- Its distribution shape is similar to ground truth but shifted toward lower scores.
+- Its median is significantly lower than ground truth, around 53 points.
+- This indicates that Algorithm 1 (GA) systematically underestimates scores, with predictions generally lower than actual values.
+
+**Algorithm 2 (Transformer):**
+- Its distribution shape and position highly align with ground truth.
+- Its median almost coincides with ground truth's median, both around 59 points.
+- This indicates that Algorithm 2 (Transformer)'s predicted scores closely match the actual distribution with no obvious systematic bias.
+
+**Summary:** From the score distribution perspective, Algorithm 2 (Transformer) successfully replicates the distribution characteristics of ground truth, while Algorithm 1 (GA) shows clear underestimation tendencies. However, both predictions contain very few extreme minimum value outliers.
+
+---
+
+### Right Plot: Mean Prediction Bias by True Score Interval
+
+This plot provides deeper bias analysis by dividing data into 5-point intervals based on true scores (Y-axis), then calculating the average difference between algorithm predictions and ground truth within each interval (i.e., mean bias = predicted value - true value).
+
+- **X-axis**: Represents mean bias
+  - Negative values: Underestimation (predicted value < true value)
+  - 0 value (red dashed line on right): No bias, the ideal state
+  - *Note: All biases with ground truth are negative because these are scores obtained using the insertion simulation function `simulate_insertion_tool` (code in [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py#L41)) based on model-predicted operations. This value must be ≤ theoretical optimal score, so algorithms can only underestimate scores, and x-axis values can only be non-positive.*
+
+- **Y-axis**: True score intervals
+- **Bars**: Blue represents Algorithm 1 (GA) bias, green represents Algorithm 2 (Transformer) bias
+- **n**: Indicates sample count within each score interval; larger sample sizes yield more reliable bias results for that interval
+
+#### Analysis Points:
+
+**Algorithm 1 (GA) (Blue bars):**
+- GA's prediction bias generally increases proportionally with score level
+
+**Algorithm 2 (Transformer) (Green bars):**
+- Green bars are close to the 0-value line, indicating very small bias
+- In most score intervals, Algorithm 2 only slightly underestimates, but in low-score ranges (e.g., 25-30 points) and extremely high-score ranges (e.g., 95-100 points), its bias is relatively severe
+- Compared to Algorithm 1 (GA), Algorithm 2 (Transformer) has better bias control
+
+**Summary:** The bias analysis chart confirms the violin plot conclusions. GA exhibits widespread underestimation compared to Transformer, while Algorithm 2's prediction bias is very small.
+
+---
+
+## Overall Conclusion
+
+**Algorithm 2 is significantly superior to Algorithm 1 in prediction accuracy and is the better choice.** Although Algorithm 2's runtime is much longer than Algorithm 1, its prediction results align well with ground truth across all core metrics with smaller errors.
+
+**Common weakness:** Both have suboptimal extreme value predictions. I believe this is due to the proportion of extreme value points at the distribution edges in the training set, and it's possible that certain score ranges with high bias encountered out-of-distribution samples.
+
+---
+
+## Comparison of "Padding" vs "Skipping" (Ablation Study)
+
+Now we return to using the "skipping" method to process the dataset and perform the same statistical analysis.
+
+Since the process is almost identical to "padding," only an overview is provided here.
+
+### Obtaining and Preprocessing Datasets
+
+Obtained `data_GA_skip.json` and `data_transformer_skip.jsonl` datasets and preprocessed them (after skipping samples where move length ≠ 3, approximately 90% of data remains; 5M dataset × 90% is large enough for sufficient training).
+
+Trained models and saved them, using the same evaluation method as the "padding" approach (Algorithm 1 represents GA, Algorithm 2 represents Transformer).
+
+### Table 2: Skip Strategy Results
+
+| Metric                  | Algorithm 1 (GA) | Algorithm 2 (Transformer) | Ground Truth |
+|------------------------|------------------|---------------------------|--------------|
+| **Average Score**       | 52.51           | 56.24                     | 59.43        |
+| **Median Score**        | 53.00           | 58.00                     | 59.00        |
+| **Score Std Dev**       | 13.02           | 15.15                     | 11.24        |
+| **Minimum Score**       | 4               | 2                         | 23           |
+| **Maximum Score**       | 92              | 99                        | 99           |
+| **Runtime (seconds)**   | 39.91           | 82.17                     | -            |
+| **MSE**                 | 103.87035       | 87.87605                  | -            |
+
+| Bias Analysis (Ground Truth - Predicted Value) | Algorithm 1 (GA) | Algorithm 2 (Transformer) |
+|------------------------------------------------|------------------|---------------------------|
+| **Mean Bias**                                   | -6.92           | -3.19                     |
+| **Median Bias**                                 | -5.00           | 0.00                      |
+| **Std Dev Bias**                                | 7.48            | 8.81                      |
+| **Minimum Score Bias**                          | -38             | -59                       |
+| **Maximum Score Bias**                          | 0               | 0                         |
+
+| Statistical Tests and Effect Size Analysis | Algorithm 1 (GA) | Algorithm 2 (Transformer) |
+|--------------------------------------------|------------------|---------------------------|
+| **t-statistic**                             | -130.754         | -51.232                   |
+| **p-value**                                 | 0.000e+00        | 0.000e+00                 |
+| **Statistical Significance**                | Significant (p < 0.05) | Significant (p < 0.05) |
+| **Cohen's d**                               | -0.925           | -0.362                    |
+| **Effect Size**                             | Large            | Small                     |
+
+---
+
+### Experimental Conclusion
+
+Comparing with Table 1 (using "padding" strategy): After using the "skipping" method to process the dataset, although Algorithm 1 (GA) metrics are not significantly affected, **Algorithm 2 (Transformer) shows clear performance degradation**:
+- MSE significantly increased (14.24 → 87.88)
+- Average and median scores decreased
+- Bias from ground truth clearly increased
+- Standard deviation increased
+- Effect size analysis changed from "very small" to "small"
+
+### Figure 3 Analysis
+
+![](figure_3.png)
+Comparing Figure_1.png with Figure_3.png, we can intuitively observe from the plots that Algorithm 2 (Transformer) exhibits significantly worse bias for low scores. Comparing the previous violin plots and bias bar charts, the low-to-medium score range shows noticeably more severe bias.
+
+**My interpretation:** GA is heuristic-based, so the method for calculating scores is defined by us. As for padding the training set with 0s, this may have enabled the model to learn to identify situations where "no matter how cards are played, no points can be scored," thus allowing Transformer to learn additional features. These characteristics play an important role in low-score range predictions (situations where "no matter how cards are played, no points can be scored" are more common in low-score ranges), which significantly impacts results.
+
+
+---
+
+## Ensemble Model Proposal
+
+Since these two models have different training methods, I hypothesized they focus on different aspects. When Transformer predicts poor results, GA might perform better. Moreover, GA is very fast, so integrating GA into Transformer wouldn't cause much additional time consumption.
+
+To verify this hypothesis, I used this method to simply ensemble Transformer and GA together: For the same pair of A and B, both models predict simultaneously, calculate the true scores for both strategies, and return the higher score between the two.
+
+```python
+move1 = Transformer_Strategy(A, B)
+score1 = strategy_TrueScore(A, B, move1)
+
+move2 = GA_Strategy(genome, A, B)
+score2 = strategy_TrueScore(A, B, move2)
+
+if score1 < score2:
+    return move2
+else:
+    return move1
+```
+
+Similarly, let's examine the evaluation results of the current Transformer + GA ensemble model versus the Transformer model (previous Algorithm 2). Re-testing with **20,000 iterations**:
+
+### Table 3: Ensemble Model Results
+
+| Metric                  | Algorithm 1 (GA+Transformer) | Algorithm 2 (Transformer) | Ground Truth |
+|------------------------|------------------------------|---------------------------|--------------|
+| **Average Score**       | 58.93                        | 58.59                     | 59.25        |
+| **Median Score**        | 59.00                        | 59.00                     | 59.00        |
+| **Score Std Dev**       | 11.38                        | 11.73                     | 11.24        |
+| **Minimum Score**       | 16                           | 5                         | 21           |
+| **Maximum Score**       | 98                           | 98                        | 98           |
+| **Runtime (seconds)**   | 228.56                       | 139.63                    | -            |
+| **MSE**                 | 3.6578                       | 13.2122                   | -            |
+
+| Bias Analysis (Ground Truth - Predicted Value) | Algorithm 1 (GA+Transformer) | Algorithm 2 (Transformer) |
+|------------------------------------------------|------------------------------|---------------------------|
+| **Mean Bias**                                   | -0.32                        | -0.66                     |
+| **Median Bias**                                 | 0.00                         | 0.00                      |
+| **Std Dev Bias**                                | 1.88                         | 3.57                      |
+| **Minimum Score Bias**                          | -26                          | -52                       |
+| **Maximum Score Bias**                          | 0                            | 0                         |
+
+| Statistical Tests and Effect Size Analysis | Algorithm 1 (GA+Transformer) | Algorithm 2 (Transformer) |
+|--------------------------------------------|------------------------------|---------------------------|
+| **t-statistic**                             | -24.347                      | -26.153                   |
+| **p-value**                                 | 4.661e-129                   | 2.824e-148                |
+| **Statistical Significance**                | Significant (p < 0.05)       | Significant (p < 0.05)    |
+| **Cohen's d**                               | -0.172                       | -0.185                    |
+| **Effect Size**                             | Very Small                   | Very Small                |
+
+---
+
+### Analysis:
+
+**Bias:** **Algorithm 1 outperforms Algorithm 2 across all bias metrics**, with smaller mean, standard deviation, and minimum score biases, indicating its predictions are overall closer to ground truth.
+
+**Statistical Tests:**
+- Differences between both algorithms' predictions and ground truth are **statistically significant** ($p < 0.05$), meaning these differences are unlikely due to random factors.
+- However, **Cohen's d** analysis shows both algorithms have **very small** effect sizes. This indicates that while differences are statistically significant, the magnitude of these differences is extremely small in practical applications.
+
+---
+
+### Conclusion
+
+**The hypothesis is validated.** GA assisted Transformer **546 times** out of 20,000 runs. Although the proportion of "assistance" is extremely low (546/20,000 ≈ 0.027 or 2.7%), improvements are seen across nearly all metrics, with **significant impact on accuracy (MSE reduced by 72%)**. Due to serial execution and calling `strategy_TrueScore`, Transformer + GA ensemble has **63% more runtime** than Transformer alone.
+
+### Figure 2 Analysis
+![](figure_2.png)
+By observing the violin plot and bias bar chart, we can intuitively perceive the improvement in prediction accuracy of our ensemble model.
+
+
+# Ensemble Model Code Performance Optimization
+
+Now, based on the above discussion, let's try to use the newly obtained Transformer + GA model to challenge the original exhaustive recursive algorithm in terms of running speed (we've already analyzed accuracy, and exhaustive recursion yields the ground truth).
+
+**Important Note:** The batch processing discussion here is based on Transformer + GA's offline computation with large data volumes. However, it is **not suitable for real-time processing scenarios** requiring low latency, immediacy, and small single-request data volumes (such as our game).
+
+## Characteristics of the Ensemble Model
+
+For this Transformer + GA ensemble model:
+
+- **Genetic Algorithm (GA):** Its prediction logic is greedy and serial, not suitable for batch prediction.
+- **Transformer Model:** Its model architecture and computation method are parallel, very suitable for GPU batch prediction (this is one of the advantages of neural networks).
+
+## Implementation Strategy
+
+### Transformer Batch Processing
+Convert Transformer's prediction to batch processing.
+
+### Parallel Execution with Threading
+Use `ThreadPoolExecutor` to launch two threads: one for GA and one for Transformer for parallel prediction.
+- GA is **CPU-intensive**
+- Transformer is **GPU-intensive**
+
+This approach effectively utilizes hardware performance. Although the code is affected by the GIL (Global Interpreter Lock), it still provides significant speedup:
+
+**When using GPU:**
+- Transformer inference tasks are mainly executed by the GPU, while GA tasks are executed by the CPU
+- `threading` coordinates these two, achieving true parallel use of GPU and CPU resources, because GPU computation doesn't depend on the GIL
+
+**When using CPU only:**
+- Although both tasks run on CPU, because PyTorch and NumPy libraries release the GIL during their core computation parts, the GA thread can still acquire the GIL and get execution opportunities while the Transformer thread waits for its C++ backend to complete computation
+- While this isn't perfect hardware parallelism, it's still much faster than serial execution
+
+## Batch Ensemble Model Prediction Function
+
+```python
+def Transformer_predict_batch_plus_GA(A_batch, B_batch, genomeforassist, TR_model, 
+                                       num_a=6, num_b=3, device='cuda')
+(Implementation in https://github.com/tcita/python_server/blob/master/AI_algorithm/Trans.py#L737)
+"""
+Batch prediction using trained Transformer model (for A=6, B=3).
+
+Parameters:
+    A_batch: List of lists, each inner list is an A sequence of length num_a
+    B_batch: List of lists, each inner list is a B sequence of length num_b
+    model: TransformerMovePredictor model instance
+    num_a: Length of A sequence, default is 6
+    num_b: Length of B sequence, default is 3
+    device: Computing device, default is 'cuda'
+
+Returns:
+    List: moves_batch
+"""
+```
+
+## Timing Function
+
+```python
+def execution_time()  (Implementation in https://github.com/tcita/python_server/blob/master/AI_algorithm/Trans.py#L1026)
+```
+
+Uses 20,000 `{A, B}` samples to test:
+- Recursive algorithm
+- Batch-optimized Transformer + GA
+- Non-batched Transformer
+- Serial GA
+- Exhaustive recursion runtime
+
+**Small trick used:** The `black_hole` function modifies a global variable to ensure the interpreter doesn't optimize away unused functions, preventing inaccurate runtime measurements.
+
+```python
+def black_hole(value):
+    global _BLACK_HOLE_SINK
+    _BLACK_HOLE_SINK = value
+```
+
+---
+
+## Experimental Results and Analysis
+
+After 20,000 iterations, here are my results (batch_size is 2048, same as training):
+
+| Method | Total Time (seconds) |
+|--------|---------------------|
+| **Transformer+GA (batch + parallel optimization)** | **42.785322** |
+| **Transformer (unoptimized, serial execution)** | 63.076156 |
+| **GA** | 48.705127 |
+| **recursive_Strategy** | 47.794147 |
+
+---
+
+### Analysis
+
+**Unoptimized Transformer vs GA:**
+- Unoptimized Transformer prediction speed is approximately **0.77× of GA** (slower than GA)
+
+**With Batch Processing:**
+The situation is completely different. When data scale reaches a certain level in offline computation scenarios, the improvement from batch processing is very significant.
+
+**Simple estimation:** Without optimization, the ensemble Transformer + GA model runtime should be greater than the sum of running them separately:
+$$48.7 + 63.1 = 111.8 \text{ seconds}$$
+
+**However**, in this test, the optimized ensemble model has the **shortest runtime**, proving our optimization is **highly effective**.
+
+### Key Findings
+
+1. **Batch processing dramatically improves Transformer performance** - reducing time from 63.08s to contributing to a combined 42.79s
+2. **Parallel execution of GPU (Transformer) and CPU (GA) work** enables both to run simultaneously rather than sequentially
+3. **The optimized ensemble model (42.79s) is faster than:**
+   - Unoptimized Transformer alone (63.08s)
+   - GA alone (48.71s)
+   - Even competitive with exhaustive recursion (47.79s)
+4. **The optimization achieved approximately 2.6× speedup** compared to the naive serial combination (111.8s estimated vs 42.79s actual)
+
+This demonstrates that with proper optimization (batching and parallelization), the ensemble model can achieve both high accuracy and competitive runtime performance, making it practical for large-scale offline processing scenarios.

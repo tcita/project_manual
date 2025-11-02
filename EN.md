@@ -1884,3 +1884,45 @@ $$48.7 + 63.1 = 111.8 \text{ seconds}$$
 4. **The optimization achieved approximately 2.6× speedup** compared to the naive serial combination (111.8s estimated vs 42.79s actual)
 
 This demonstrates that with proper optimization (batching and parallelization), the ensemble model can achieve both high accuracy and competitive runtime performance, making it practical for large-scale offline processing scenarios.
+
+
+# Analysis of Modeling Paradigm Conflicts and Inductive Biases in Transformers
+
+I attempted to include the `max_score` from the training set (i.e., the score corresponding to the optimal play strategy, which represents the highest possible score at that moment) in the training process, using A and B as inputs and `max_score` as the target. When examining solely the accuracy of the predicted `max_score`, the results were excellent. The difference between the model's predicted scores and the actual values was generally minimal.
+
+However, through testing, I discovered that the model's high accuracy in predicting `max_score` was only limited to cases where A and B had lengths of 6 and 3, respectively. In other words, the model had not learned the "true" universal method for calculating scores. For instance, when length(A)=9 instead of 6, the prediction results were quite poor.
+
+I also attempted to include `max_score` as an additional auxiliary feature to guide the generation of `best_move`. Unfortunately, this made almost no difference, meaning the model failed to recognize the relationship between `max_score` and `best_move`. Therefore, I abandoned this idea and continued to use only A and B as input features. Since the specific steps of these experiments were essentially the same as the Transformer experiments I demonstrated previously, only with different parameters, I will not elaborate further on the training details and evaluation.
+
+Additionally, it is necessary to examine the permutation invariance issue. One might question: does this problem truly require permutation invariance? My answer is affirmative. Reviewing the game rules, for the same A and B, the maximum score obtainable remains the same regardless of any arbitrary ordering.
+
+## Permutation Invariance Test
+
+Using a sample with A and B that fully meets the requirements, I generated all permutations of B while keeping other data unchanged, combining them with the original sample to expand the test set. I then tested the Transformer model using this test set. If the test results are consistent with the original sample, this indicates the model is permutation-invariant.
+
+Here are the test results from two randomly selected samples:
+
+**Recursive** represents the theoretical maximum score obtained through recursion.
+
+```
+A:[11, 13, 3, 10, 12, 6], B: [13, 8, 1], Transformer result: 66, Recursive result: 66
+A:[11, 13, 3, 10, 12, 6], B: [13, 1, 8], Transformer result: 66, Recursive result: 66
+A:[11, 13, 3, 10, 12, 6], B: [8, 13, 1], Transformer result: 45, Recursive result: 66
+A:[11, 13, 3, 10, 12, 6], B: [8, 1, 13], Transformer result: 45, Recursive result: 66
+A:[11, 13, 3, 10, 12, 6], B: [1, 13, 8], Transformer result: 38, Recursive result: 66
+A:[11, 13, 3, 10, 12, 6], B: [1, 8, 13], Transformer result: 38, Recursive result: 66
+
+A:[6, 5, 9, 11, 10, 13], B: [6, 3, 7], Transformer result: 70, Recursive result: 70
+A:[6, 5, 9, 11, 10, 13], B: [6, 7, 3], Transformer result: 70, Recursive result: 70
+A:[6, 5, 9, 11, 10, 13], B: [3, 6, 7], Transformer result: 12, Recursive result: 70
+A:[6, 5, 9, 11, 10, 13], B: [3, 7, 6], Transformer result: 12, Recursive result: 70
+A:[6, 5, 9, 11, 10, 13], B: [7, 6, 3], Transformer result: 12, Recursive result: 70
+A:[6, 5, 9, 11, 10, 13], B: [7, 3, 6], Transformer result: 12, Recursive result: 70
+```
+
+Comparing the different Transformer predictions within the same sample combination against the constant true theoretical maximum score is sufficient to refute the claim that the Transformer model is permutation-invariant.
+
+## Conclusion
+
+After detailed code review, a clear conclusion can be drawn: this TransformerMovePredictor model is highly sensitive to the element order of input sequence B. For the same hand, different initial permutation orders will lead the model to generate different feature inputs and ultimately different strategy predictions. By design, this model is not "Permutation-Invariant."
+

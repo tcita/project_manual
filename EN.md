@@ -1926,3 +1926,298 @@ Comparing the different Transformer predictions within the same sample combinati
 
 After detailed code review, a clear conclusion can be drawn: this TransformerMovePredictor model is highly sensitive to the element order of input sequence B. For the same hand, different initial permutation orders will lead the model to generate different feature inputs and ultimately different strategy predictions. By design, this model is not "Permutation-Invariant."
 
+
+
+## Root Cause Analysis
+
+This order sensitivity stems from two levels: data processing and model architecture:
+
+### Order Dependency at the Feature Engineering Level
+
+The `future_score` feature introduces explicit order dependency when generating feature vectors for each card element.
+
+- **Key feature `future_score_ratio`**: This feature's calculation is based on all subsequent elements after the current element in list B (`remaining_B = B[i + 1:]`). This means that the "future score" feature value associated with an element directly depends on its position in the input sequence.
+
+- **Example**: For hand B = [10, 20, 30], when calculating features for element 10, its "future" hand is [20, 30]. However, for hand B = [30, 20, 10], when calculating features for element 10, its "future" hand is an empty set []. This results in the same card element having completely different feature vectors input to the model under different input orders.
+
+### Order Sensitivity at the Model Architecture Level
+
+The Transformer architecture itself is designed to process ordered sequences, and its core components reinforce order dependency.
+
+- **Positional Encoding**: The model explicitly adds unique positional encoding information to feature vectors at the input layer. Therefore, even if two elements have identical feature vectors, as long as they are at different positions in the input sequence, the initial information received by the model is different.
+
+- **Self-Attention Mechanism**: This mechanism updates each element's representation by computing the interrelationships among all elements in the sequence. The entire computation process is global and depends on both relative and absolute positions of elements. Any change in input order will completely alter the distribution of attention scores, leading to differences in final output.
+
+### Considerations on Current Model's Generalization Feasibility
+
+The conflict between standard Transformer's modeling paradigm and the original problem cannot be ignored. Moreover, at higher data scales, both the current Transformer and GA features may struggle to adapt, especially the `future_score` feature—which is crucial in the current special case—is customized based on the assumption that both A and B are very small in length. It implicitly assumes length(B) ≤ 3.
+
+When A and B are very large:
+- If we continue using `future_score`, since it only provides a lookahead for scores when length(B) < 3, this lookahead will have minimal impact on the overall score
+- Additionally, obtaining large-scale training sets with high data volume may be very difficult
+- The lack of permutation invariance leads to weak robustness
+
+### Potential Solutions and Their Trade-offs
+
+**Solution 1: Test-Time Augmentation (TTA)**
+Of course, we can use an approach similar to ensemble GA: compute all permutations of B, then make predictions for each B permutation combined with A, and take the maximum predicted result to mask the permutation invariance problem. One specific method is TTA (Test-Time Augmentation). However, this brings length(B)! times the number of predictions, resulting in much higher runtime.
+
+**Solution 2: Modified Model Architecture**
+If we modify the model architecture, we can resolve order sensitivity. For example, using Set Transformer ideas: remove positional encoding and use permutation-invariant aggregation functions, instructing the model to treat B as an unordered set. However, the problem is that B is unordered while A is ordered—this may require a hybrid model architecture.
+
+
+### Failed Attempts
+
+I conducted several attempts based on these ideas. The main concept was to **transform the handling of the cards-to-be-played group (B cards) from an "ordered sequence" to an "unordered set"**.
+
+Model training code can be found at: [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/Enhanced_Trans.py)
+
+Subsequent testing proved that although it did solve the permutation invariance problem of group B (the future_score calculation no longer relied on "hard-coding" but instead used a more general dynamic greedy strategy), its accuracy decreased. It performed premature abstraction and information aggregation precisely when individual details needed to be preserved most, thereby losing critical signals necessary for making precise decisions. The previous Transformer's future_score was too idealistic and perfect, while the new hybrid model, in order to adapt to the new data, overlooked that the core of this task is not a pure set processing problem.
+
+Although B itself is unordered, the final decision—which B element to insert into which position in A—is a relational reasoning problem that highly depends on individual-to-individual (B_i vs A_j) and individual-to-order (B_i vs the ordered structure of A) relationships. Additionally, the adjustments made caused it to lose key heuristic optimizations for special cases. We can observe where this new model fails from the attention map:
+
+![](AttentionMap.png)
+
+> model1 represents the original model, model2 represents the hybrid model I attempted
+
+From beginning to end, the model treats all input features (A and B) as a whole for processing. Each layer updates the understanding of all features globally, without shifting attention away from any particular part in later stages. This is the behavior of a standard Transformer encoder, which also leads to a certain conflict between the modeling and the original problem. Such a design is problematic.
+
+## Part 3: Server Development and Game Architecture
+
+In the game's PVE scenario, the strategy is real-time, and even with a lower-performance serial implementation, the AI's computation time per request is short enough (63/20000=0.00315s=3.15ms). Therefore, we continue to use the CPU-only serial GA+Transformer integrated model, as it is more suitable for building our game's local server.
+
+The server will exchange data with the Unity game (client). The client sends A and B, the server makes predictions based on the received A and B, returns the strategy (best_move), and then returns the prediction results to the client for automated computer player operations.
+
+The web framework used here is Flask.
+
+Code implementation can be found at: [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/server.py)
+
+Then Docker is used to containerize the server. This packages it with its runtime environment, allowing it to run independently of the original development environment. After testing, the packaged server runs normally.
+
+### Unity Project Architecture
+
+#### Server Containerization and Usage
+
+Unity was chosen as the tool for building the game client mainly because it is a game engine that provides convenience for game development, with relatively simple and easy-to-use functions that are also powerful enough.
+
+Unity Version Control (UVCS/Plastic SCM), specifically designed for Unity projects, was used as the version control tool.
+
+To facilitate image portability, the written server project was containerized using Docker and packaged as gameserver_v1.tar.
+
+**Step-by-step instructions:**
+
+After installing Docker Desktop on Windows:
+
+Complete the project's requirements.txt file
+
+Use `docker init` to create the Dockerfile and make necessary modifications, edit .dockerignore to ignore files not needed for the server project
+
+In the server project root directory on the Windows system:
+
+Build the image:
+```
+docker build -t gameserver:1.0 .
+```
+
+Export the image:
+```
+docker save -o ./gameserver_v1.tar gameserver:1.0
+```
+
+The method to start the server based on the packaged image is:
+
+1. Load the tar format image (only needs to be loaded once during initial deployment; generally no need to load again after the image is built)
+
+```
+docker load -i gameserver_v1.tar
+```
+
+2. Create and start the container based on the image
+```
+docker run -p 5000:5000 --name gameserver gameserver:1.0
+```
+
+#### Unity Frontend Architecture
+
+Unity's programming paradigm differs significantly from general software development. Unity's C# script code is deeply coupled with Unity's own components. To fully understand the functionality of a piece of code, one must first have a certain understanding of the Unity engine itself.
+
+I developed based on the Unity community framework [2], where the key points at the code level are: understanding the logic and complex inheritance relationships of the framework APIs, and how to use various APIs combined with Unity components for programming to achieve the desired functionality. This is difficult to describe in words and somewhat disconnected from the main theme of this document. Therefore, I present C4 model diagrams of the Unity architecture I designed and implemented to explain this Unity client, focusing our attention on the software architecture:
+
+Using draw.io to create C4 model drafts, then writing DSL scripts and rendering them as PNG format images:
+
+#### C4 Model Architecture Diagrams
+
+<style>
+  /* This is CSS styling that tells the PDF renderer how to handle images */
+  img {
+    page-break-inside: avoid; /* Core rule: prohibit page breaks inside images */
+    max-width: 100%;          /* Ensure images don't exceed page width */
+    display: block;           /* Make images block-level elements for easier margin setting */
+    margin-top: 20px;         /* Leave some space above the image */
+    margin-bottom: 20px;      /* Leave some space below the image */
+    margin-left: auto;        /* Together with the next line, center the image horizontally */
+    margin-right: auto;
+  }
+</style>
+
+<img src="c1.png" alt="level 1">
+
+### Context Diagram
+
+<img src="c2.png" alt="level 2">
+
+### Container Diagram
+
+<img src="c3.png" alt="level 3">
+
+### Component Diagram
+
+Here are some examples of design patterns used in this Unity client:
+
+**Singleton Pattern **
+Objects of classes responsible for module functionality (such as TurnsManager, CardManager, etc.) have one and only one global instance, avoiding duplicate resource initialization.
+
+**Adapter Pattern **
+Inside the client, the computer's action strategy is an array, but the action strategy obtained after requesting the server is a JSON format object. Here, ServerManager is needed to parse the JSON object for adaptation.
+
+**Observer Pattern **
+At the beginning and end of a turn, or after a scoring situation occurs (called a "match" in our project), a publish-subscribe mechanism is used to publish state change signals, notifying all observers subscribed to the event to perform corresponding logical behaviors.
+
+**Prototype Pattern **
+In the game, there exists a visual, reusable card prefab component that defines the most basic framework of a card (model, material, scripts, collision box, etc.). Each card in the card game scene is efficiently cloned based on this prefab component and then customized. This prefab is the prototype object for all cards (The Prototype).
+
+**State Pattern **
+In the game scene, the operational logic of cards needs to change according to different states.
+
+For example:
+- Whether it is the player's hand card (the player cannot move the computer's hand cards)
+- Whether it is in the discard pile (cards in the discard pile cannot be operated on anymore)
+
+#### Game Demo Demonstration
+
+![Game Demo 1](1.png)
+
+I entered `docker start gameserver` in the Debian terminal running on WSL2 to start the server.
+
+***
+![Game Demo 2](2.png)
+
+Starting the game in Unity project's development interface, the cards in the middle of the screen are the cards on the field, a total of 6 cards (A in the card game optimal strategy problem).
+The 3 cards below are the player's hand cards (B in the card game optimal strategy problem).
+(
+The text in the transparent dialog box above is randomly generated greetings I called using the Qwen* API online. I set several initial personalities:
+{
+      "Absent-minded", "Graceful", "Impatient", "Emotionally fragile",
+      "Pessimistic", "Gentle", "Competitive", "Vain", "Shy", "Nervous"
+      ,"relaxed","anxious"
+}
+One is randomly selected locally (the reason for using local randomization rather than letting the LLM randomize is that, through my testing, before this document was completed, Qwen had a tendency to favor positive personality choices), used as one of the Prompts, combined with other prompts to have the LLM generate a sentence to greet the player. This time the randomly selected personality was Pessimistic.
+
+>[Qwen]* LLM developed by Alibaba
+***
+![Game Demo 3](3.png)
+
+First is the player's turn. I played 3 cards. Note that the first two cards did not cause a match, but the last card's value is the same as the first card on the field, both are 2, so it matches all cards and scores.
+
+The player's score will be updated to the sum of all card values.
+>The values of J, Q, K are considered as 11, 12, 13
+***
+![Game Demo 4](4.png)
+
+The player's score is updated to 52, the player ends their turn, entering the computer's turn.
+The computer's hand is initialized to [K,J,3] (or [13,3,11]), the cards on the field are initialized to [2,5,7,4,K,8] (or [2,5,7,4,13,8])
+>Here the computer's hand card sorting method [K,J,3] is based on the order in which the computer received the cards
+
+The computer inserts K from its hand to the front of the cards on the field. It matches and scores, and is eliminated. The cards on the field become [8], the computer scores 44.
+***
+![Game Demo 5](5.png)
+It can no longer score, but the computer follows the strategy to insert the card at the front of the remaining cards on the field.
+***
+![Game Demo 6](6.png)
+Opening the server log, we can observe that the computer's actual card-playing strategy is consistent with the data sent and received by the server (the output above the highlighted part of the log is the fixed communication check when the server is initialized).
+
+### Appendix:
+
+**Special Tree Structure :**
+
+When thinking about optimization methods, I tried using a tree to intuitively represent this problem to obtain a better algorithm. During this process, I discovered such a tree structure:
+
+A tree of depth k, with root node value 0, all leaves at the k-th level. The value of each non-root node is a positive integer between 1 and n. For any path from root to leaf, node values are strictly increasing. This tree contains and only contains all paths satisfying the above conditions. The question is: how many leaf nodes does this tree have?
+
+Each path from root node to leaf needs to have a number, which is equivalent to P(n, k). The condition of being strictly increasing strictly stipulates that after the numbers are determined, there is one and only one order on the path, which cannot be permuted, so the result is P(n, k)/k!, which is C(n, k). Moreover, each path intuitively shows every case of the combination number.
+
+Consider the multiset problem discussed in algorithm analysis: from the set composed of {A,A,A,A,A,A,B,B,B}, elements are taken out without replacement and all placed in a one-dimensional array. How many different arrays of length 9 can be formed? The solution to this problem is C(9,3)*C(6,6).
+
+For convenient demonstration, we reduce the scale to observe. Assume the multiset is {A,A,A,B,B}.
+
+This corresponds to k=3, n=5. After assigning sequence numbers [1~5] to these elements,
+
+A tree can be generated:
+![Tree Structure Diagram](tree1.png)
+
+For each path:
+Connect an ascending linked list composed of the remaining unselected (n-k) elements to the leaf node (ascending can be extended to any bijection rule).
+
+According to C(n, k) = C(n, n-k), each root-to-leaf path (ignoring the root value 0) corresponds to a non-repeating array possibility, and the array set composed of values on each path corresponds one-to-one with each array in the problem.
+
+Based on the tree's rules, the above diagram can be extended to:
+![Tree Structure Diagram](tree2.png)
+
+Of course, there is still a certain difference between the current tree structure and the card insertion score maximization problem we are studying. It also includes adding "card values" (1~13) to nodes, distinguishing "type values" of A and B, then adding matching rule operations (after considering matching rules it becomes very complex, requiring the design of many operation functions for this tree; to achieve these goals, the tree structure may need to undergo huge changes), etc. However, due to space limitations, we will not discuss further.
+
+Observing this tree in another way, and because the root of this tree has n-k+1 child nodes
+(because the path length from root to leaf needs to be k, and the numbers on nodes ≤n, so the child node values of the tree must be ≤n-k+1, otherwise a path of length k cannot be formed)
+
+Consider each child node of the root:
+
+When the value is 1, the nodes on the path from it to the leaf still have (n-1) choices, and (k-1) more need to be selected, so there are C(n-1,k-1) combinations, meaning this node is the ancestor node of C(n-1,k-1) nodes.
+When the value is 2, the nodes on the path from it to the leaf still have (n-2) choices, and (k-2) more need to be selected, so there are C(n-2,k-1) combinations, ......
+
+Child node with value (n-k+1): Still need to select (k-1) numbers from {n-k+2,...,n}, there are C(k-1,k-1)=1 path.
+
+$$
+\binom{n-1}{k-1} + \binom{n-2}{k-1} + \dots + \binom{n-k+1}{k-1}
+$$
+Or
+$$
+\sum_{i=1}^{n-k+1} \binom{n-i}{k-1}
+$$
+
+And this sum equals the total number of leaves, so
+
+$$
+\sum_{i=1}^{n-k+1} \binom{n-i}{k-1} = \binom{n}{k}
+$$
+
+This is the hockey-stick identity (can be proven by continuously recursively expanding the last term based on Pascal's triangle relationship (n k) = (n-1 k) + (n-1 k-1)). This tree cleverly connects data structures and combinatorial problems.
+
+
+
+## Author's Q&A 
+
+**Q: Since the special case discussed in this paper can be completely solved by exhaustive search, why use AI?**
+
+**A:** The article uses extensive content and various technical methods to discuss the time consumption at this scale, proving that at the critical point around this data scale (|A|=6, |B|=3), AI agents are feasible, and after parallel optimization can achieve the speed of exhaustive search, but it is unnecessary. This doesn't mean that using AI at this scale is the optimal solution in application, but rather before the discussion, the range of this critical point was unknown and lacked proof, and the choice and effectiveness of the research tools used were also unknown.
+
+**Q: Why is the scale of the special case so small?**
+
+**A:** The NP-hard proof of the problem, as well as time complexity analysis and search space scale analysis, all indicate that exhaustive search is infeasible at large scales. However, the workflow in this paper is feasible with very small-scale data. It's small enough to conveniently and accurately obtain training sets through exhaustive search, verify the accuracy of AI methods, and at this scale it's already large enough to study its characteristics and draw some conclusions. Therefore, in larger-scale situations, these workflows and conclusions also provide some replicable and verifiable ideas for reference.
+
+**Q: What directions are there for further research?**
+
+**A:** As discussed in the article, the final AI model obtained - the hybrid strategy Transformer - in my pursuit of better generalization and robustness, lost optimization based on the special case and created design conflicts, resulting in poor performance. This requires more detailed and in-depth research.
+
+Moreover, as data scale increases, it inevitably brings higher complexity, along with more complex modeling requirements. This is very likely to reveal the limitations and bottlenecks of current approaches, but this is the necessary path to research valuable "paradigms". All attempts in this paper are just a tiny first step at the beginning.
+
+All implementation methods in this paper are based on supervised learning, which is still limited by training sets obtained through exhaustive algorithms or collected through other means, as well as manually defined features. If deep exploration proves that Transformers are fundamentally infeasible, in order to implement more general AI models, we can consider incorporating reinforcement learning mechanisms to allow AI to achieve automatic deep reasoning and planning, making final decisions.
+
+From an engineering perspective, we can also look at the client and take further mixing steps. Without using recursive exhaustive search with such time complexity, we can add a simple custom greedy strategy algorithm to the client. Because although the forward-looking nature of AI algorithms (such as future_score) and the Transformer's ability to capture correlations between elements have greatly improved MSE, it actually conflicts with the greedy strategy. In some cases, it may lower the minimum score of special cases due to being overly conservative. We can use this point to design algorithms and mix server strategies. The cost of greedy algorithms is extremely small, and I think this is a valuable engineering attempt.
+
+However, making good use of AI agent models, this heuristic method, to handle generalized NP problems is beyond what I can currently accomplish.
+
+This is my project's source code link: [**...**](https://github.com/tcita/python_server/)
+
+Because the Unity version control system is an invitation-only private system, I cannot directly make it public for everyone to access my Unity client project source files. Its architecture and demo screenshots have been described in detail in the main body of the text.
+
+
+

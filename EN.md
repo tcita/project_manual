@@ -1,25 +1,13 @@
-<script>
-MathJax = {
-  tex: {
-    inlineMath: [['$', '$'], ['\\(', '\\)']]
-  },
-  svg: {
-    fontCache: 'global'
-  }
-};
-</script>
-<script type="text/javascript" id="MathJax-script" async
-  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
-</script>
-
 # What Happens When You Turn a Card Game into an NP-Complete Problem? (A Personal Exploration )
+
+
 
 
 ## Overview
 
-From an engineering perspective, I designed and implemented a turn-based PvE card game using the Unity engine. The game features simple rules yet requires both luck and strategic decision-making. The computer opponent’s strategy is powered by a locally deployed server running a trained ensemble AI model.
+From an engineering perspective, I designed and implemented a turn-based *P v E* card game using the Unity engine. The game features simple rules yet requires both luck and strategic decision-making. The computer opponent’s strategy is powered by a locally deployed server running a trained ensemble AI model.
 
-Theoretically, I abstracted the game mechanics into a subsequence selection and score maximization problem governed by specific rules. Through in-depth analysis, I discovered that the actual decision space grows combinatorially with the number of moves, leading to an explosive increase in complexity. To understand its computational complexity, I examined a generalized version of this card game. Suspecting the abstracted problem might be NP-Hard, I formally reduced it to the Subset Sum problem, thereby proving that the problem is not only NP-Hard but also NP-Complete. Consequently, exact solutions become computationally infeasible even for moderately sized instances.
+Theoretically, I abstracted the game mechanics into a subsequence selection and score maximization problem governed by specific rules. Through in-depth analysis, I discovered that the actual decision space grows combinatorically with the number of moves, leading to an explosive increase in complexity. To understand its computational complexity, I examined a generalized version of this card game. Suspecting the abstracted problem might be NP-Hard, I formally reduced it to the Subset Sum problem, thereby proving that the problem is not only NP-Hard but also NP-Complete. Consequently, exact solutions become computationally infeasible even for moderately sized instances.
 
 To address this challenge, I explored a general-purpose solution approach based on a lightweight surrogate model that integrates a Transformer architecture with a genetic algorithm. The core idea is to leverage an exact exhaustive-search algorithm to generate high-quality training samples within a computationally tractable problem scale, then train a computationally inexpensive AI model to mimic the optimal decision-making behavior observed in those samples.
 
@@ -76,15 +64,20 @@ This section presents the Unity client architecture and live gameplay demonstrat
 ### 4. Appendix, Author’s Self-Reflection (Q&A), and Other Supplementary Materials
 
 
+
+
+
 ## Part I: Game Rules and Algorithmic Analysis
+
+
 
 ### Game Rules and Gameplay Example
 
-The game rules are somewhat similar to "Tile Matching" (card game). Players score points by pairing cards to eliminate them. When it's the computer's turn, the current game state is captured, and the dynamic card layout data is sent to a local AI server. The AI returns its predicted optimal move, which is then automatically executed and displayed to the user on the client side. After three rounds, the player with the higher total score wins.
+The game rules are somewhat similar to **"Tile Matching"** (card game). Players score points by pairing cards to eliminate them. When it's the computer's turn, the current game state is captured, and the dynamic card layout data is sent to a local AI server. The AI returns its predicted optimal move, which is then automatically executed and displayed to the user on the client side. After three rounds, the player with the higher total score wins.
 
 **Initial Setup**
 
-1. The system creates a list **P** containing 52 numbers, where each integer from 1 to 13 appears exactly four times (13 × 4 = 52 elements in total).
+1. The system creates a list **P** containing  *52*  numbers, where each integer from 1 to 13 appears exactly four times (13 × 4 = 52 elements in total).
 2. **Six distinct elements** are randomly drawn from list **P** to form list **A**.
     * **Example:** Suppose we obtain **A = {1, 2, 3, 7, 4, 6}**.
     * **(Note)** In this specific study, the number of elements in **A** is fixed at 6.
@@ -103,6 +96,8 @@ The game rules are somewhat similar to "Tile Matching" (card game). Players scor
 
 * On their turn, a player selects one card from **B** and inserts it into one of the valid insertion positions in **A**.
 * Once selected and inserted, the card is removed from **B** and added to **A**.
+
+
 
 **Example Turn Sequence**
 
@@ -175,6 +170,7 @@ To compute the optimal strategy for a given pair of lists **A** and **B**, we fi
 
 ***Strategy***:  
 In this context, a *strategy* specifies **both**:  
+
 1. The **order** in which elements from **B** are inserted, and  
 2. The **insertion positions** in **A** where each selected element is placed.  
 
@@ -212,7 +208,7 @@ First, we perform a generalized mathematical analysis of the problem:
 ### Strategy Evaluation Complexity:  
 This computes the time complexity required to determine the outcome—according to the game rules—given arrays A and B and a specified insertion position(strategy).
 
-For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose $|B| = n$ and $|A| = m$. In the first step, there are $n$ choices for which element to insert, and for each such choice, there are $m+1$ possible insertion positions. Thus, there are $n \cdot (m+1)$ possible paths at the first level.
+For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose $$|B| = n$$ and $|A| = m$. In the first step, there are $n$ choices for which element to insert, and for each such choice, there are $m+1$ possible insertion positions. Thus, there are $n \cdot (m+1)$ possible paths at the first level.
 
 After inserting an element at an arbitrary position, let $p$ denote the probability that a match occurs.
 
@@ -233,24 +229,24 @@ Let the two selected positions be $i$ and $j$ with $i < j$. The distance (inclus
 
 The expected value is:
 
-$
+$$
 \mathbb{E}[d] = \frac{\displaystyle \sum_{d=2}^{m+1} d \cdot (m - d + 2)}{\binom{m+1}{2}}
 = \frac{(m+2)\sum_{d=2}^{m+1} d - \sum_{d=2}^{m+1} d^2}{\binom{m+1}{2}}
-$
+$$
+
 
 Applying the formulas for the sum of an arithmetic series and the sum of squares, and simplifying, we obtain:
 
-$
+$$
 \mathbb{E}[d] = \frac{m + 5}{3}
-$
-
+$$
 Therefore, **the expected length of the removed subsequence upon a successful match is $\frac{|A| + 5}{3}$**.
 
 Consequently, if the current length of **A** is $|A|$, then after a match, the expected new length $|A'|$ is:
 
-$
+$$
 \mathbb{E}[|A'|] = |A| + 1 - \frac{|A| + 5}{3} = \frac{2|A| - 2}{3}
-$
+$$
 
 ---
 
@@ -266,10 +262,9 @@ Let:
 
 Due to the linearity of expectation and the earlier result on sequence length reduction, after a match:
 
-$
+$$
 E[K'] \approx \frac{2E[K] - 2}{3}
-$
-
+$$
 Meanwhile, the size of **B** decreases by 1.
 
 The matching probability at any step is approximately:
@@ -2194,6 +2189,9 @@ This is the hockey-stick identity (can be proven by continuously recursively exp
 
 
 ## Author's Q&A 
+
+note: Google Colab???
+
 
 **Q: Since the special case discussed in this paper can be completely solved by exhaustive search, why use AI?**
 

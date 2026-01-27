@@ -1880,8 +1880,9 @@ $$48.7 + 63.1 = 111.8 \text{ seconds}$$
 
 This demonstrates that with proper optimization (batching and parallelization), the ensemble model can achieve both high accuracy and competitive runtime performance, making it practical for large-scale offline processing scenarios.
 
-
 # Analysis of Modeling Paradigm Conflicts and Inductive Biases in Transformers
+
+<!-- 语言还待打磨,可以更把Conflicts的原因讲的更清晰 -->
 
 I attempted to include the `max_score` from the training set (i.e., the score corresponding to the optimal play strategy, which represents the highest possible score at that moment) in the training process, using A and B as inputs and `max_score` as the target. When examining solely the accuracy of the predicted `max_score`, the results were excellent. The difference between the model's predicted scores and the actual values was generally minimal.
 
@@ -2190,8 +2191,7 @@ This is the hockey-stick identity (can be proven by continuously recursively exp
 
 ## Author's Q&A 
 
-note: Google Colab???
-
+<!-- note: 可以提一下云训练方法Google colab-->
 
 **Q: Since the special case discussed in this paper can be completely solved by exhaustive search, why use AI?**
 

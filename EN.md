@@ -11,7 +11,7 @@ Theoretically, I abstracted the game mechanics into a subsequence selection and 
 
 To address this challenge, I explored a general-purpose solution approach based on a lightweight surrogate model that integrates a Transformer architecture with a genetic algorithm. The core idea is to leverage an exact exhaustive-search algorithm to generate high-quality training samples within a computationally tractable problem scale, then train a computationally inexpensive AI model to mimic the optimal decision-making behavior observed in those samples.
 
-This document is not a formal academic paper, nor does it claim to present rigorously validated academic contributions. Rather, it functions as a high-fidelity project report or a personal portfolio piece—demonstrating both theoretical understanding and engineering capabilities within a carefully designed sandbox environment. The work achieves a meaningful depth of exploration and incorporates several innovative elements, aiming to showcase my proficiency and readiness in applying advanced computational techniques to complex real-world-inspired problems.
+This document is not a formal academic paper, nor does it claim to present rigorously validated academic contributions. Rather, it functions as a  personal portfolio piece within a carefully designed sandbox environment.
 
 ## Project Highlights
 
@@ -208,7 +208,7 @@ First, we perform a generalized mathematical analysis of the problem:
 ### Strategy Evaluation Complexity:  
 This computes the time complexity required to determine the outcome—according to the game rules—given arrays A and B and a specified insertion position(strategy).
 
-For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose $$|B| = n$$ and $|A| = m$. In the first step, there are $n$ choices for which element to insert, and for each such choice, there are $m+1$ possible insertion positions. Thus, there are $n \cdot (m+1)$ possible paths at the first level.
+For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose **|B| = n** and **|A| = m**. In the first step, there are **n** choices for which element to insert, and for each such choice, there are **m+1** possible insertion positions. Thus, there are $n \cdot (m+1)$possible  paths at the first level.
 
 After inserting an element at an arbitrary position, let $p$ denote the probability that a match occurs.
 
@@ -269,9 +269,7 @@ Meanwhile, the size of **B** decreases by 1.
 
 The matching probability at any step is approximately:
 
-$
-p = \frac{\text{number of matchable elements in } A}{\text{size of remaining } B}
-$
+$p = \frac{\text{number of matchable elements in } A}{\text{size of remaining } B}$
 
 Thus, after a successful match:
 - Numerator (matchable count) shrinks roughly by a factor of $2/3$,
@@ -279,10 +277,9 @@ Thus, after a successful match:
 
 Assuming large values ($x = E[K] \gg 1$, $y = |B| \gg 1$), we observe:
 
-$
+$$
 \frac{x}{y} > \frac{(2x - 2)/3}{y - 1} \approx \frac{2x}{3(y - 1)} \approx \frac{2}{3} \cdot \frac{x}{y}
-$
-
+$$
 Hence, **the matching probability $p$ decreases after a successful match**.
 
 Conversely, if no match occurs:
@@ -1978,7 +1975,9 @@ Although B itself is unordered, the final decision—which B element to insert i
 
 From beginning to end, the model treats all input features (A and B) as a whole for processing. Each layer updates the understanding of all features globally, without shifting attention away from any particular part in later stages. This is the behavior of a standard Transformer encoder, which also leads to a certain conflict between the modeling and the original problem. Such a design is problematic.
 
-## Part 3: Server Development and Game Architecture
+
+
+## Part III: Server Development and Game Architecture
 
 In the game's PVE scenario, the strategy is real-time, and even with a lower-performance serial implementation, the AI's computation time per request is short enough (63/20000=0.00315s=3.15ms). Therefore, we continue to use the CPU-only serial GA+Transformer integrated model, as it is more suitable for building our game's local server.
 
@@ -1989,6 +1988,8 @@ The web framework used here is Flask.
 Code implementation can be found at: [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/server.py)
 
 Then Docker is used to containerize the server. This packages it with its runtime environment, allowing it to run independently of the original development environment. After testing, the packaged server runs normally.
+
+
 
 ### Unity Project Architecture
 
@@ -2093,7 +2094,7 @@ For example:
 
 ![Game Demo 1](1.png)
 
-I entered `docker start gameserver` in the Debian terminal running on WSL2 to start the server.
+enter `docker start gameserver` in the Debian terminal running on WSL2 to start the server.
 
 ***
 ![Game Demo 2](2.png)
@@ -2131,6 +2132,8 @@ It can no longer score, but the computer follows the strategy to insert the card
 ***
 ![Game Demo 6](6.png)
 Opening the server log, we can observe that the computer's actual card-playing strategy is consistent with the data sent and received by the server (the output above the highlighted part of the log is the fixed communication check when the server is initialized).
+
+
 
 ### Appendix:
 

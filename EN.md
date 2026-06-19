@@ -558,9 +558,9 @@ This means the **number of decision paths is roughly 2.5 times larger** than the
 Therefore, the actual search space for optimal play—represented as a decision tree—is significantly larger than the static upper bound previously calculated. This highlights the immense scale of the problem and underscores the challenge in exhaustively searching for optimal strategies.
 
 
-Exhaustive recursive search / brute-force recursion (Recursive_StrategyAndScore) attempts all possible options to guarantee finding the optimal solution, resulting in an enormous decision tree. However, the Verification Complexity Analysis yields a bound of $O(n^{3/2})$, indicating that the quality of any given strategy can be verified efficiently.
+Exhaustive recursive search / brute-force recursion (Recursive_StrategyAndScore) attempts all possible options to guarantee finding the optimal solution, resulting in an enormous decision tree. Note that the $O(n^{3/2})$ figure derived above is the *average-case* search cost under the mean-field model, not a verification bound; it should not be conflated with the complexity of checking a single strategy.
 
-The problem is in NP and is likely NP-hard.
+The problem is in NP — any given strategy can be simulated and its score verified in polynomial time (e.g., $O(n^2)$ in the worst case, by simulating the $n$ insertions each over a list of length at most $m+n$) — and is likely NP-hard.
 
 This resembles the Travelling Salesman Problem (TSP), where the decision to visit a particular city directly affects the distances and path choices for subsequent cities. Similarly, in our problem, a single "matching" operation fundamentally alters the "map" (i.e., list A), thereby influencing the scores (i.e., optimal card-playing decisions) of all subsequent "paths." This structural similarity strongly suggests that our problem is NP-hard.
 
@@ -645,7 +645,7 @@ If there exists a strategy that achieves a final score of exactly $K = 2X + T$, 
 We have proven the equivalence in both directions. Since `Subset Sum` is NP-complete, and we have constructed a polynomial-time reduction to `CARD_GAME_DEC_EQ`, we conclude:
 
 ***Conclusion i: The decision variant of the card game problem (`CARD_GAME_DEC_EQ`) is NP-hard.***
->Although this paper focuses on the optimization problem CARD_GAME_OPT, it is worth mentioning that since its variant decision problem is NP-hard, and because any given card-playing strategy can be simulated and its score verified in polynomial time ($O(n^{3/2})$), it belongs to NP. Therefore, `CARD_GAME_DEC_EQ` is NP-complete.
+>Although this paper focuses on the optimization problem CARD_GAME_OPT, it is worth mentioning that since its variant decision problem is NP-hard, and because any given card-playing strategy can be simulated and its score verified in polynomial time (worst-case $O(n^2)$), it belongs to NP. Therefore, `CARD_GAME_DEC_EQ` is NP-complete.
 
 ### Relationship Between Optimization Problem, Decision Problem, and Their Variants
 

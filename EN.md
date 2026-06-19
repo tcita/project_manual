@@ -9,6 +9,11 @@ From an engineering perspective, I designed and implemented a turn-based *P v E*
 
 Theoretically, I abstracted the game mechanics into a subsequence selection and score maximization problem governed by specific rules. Through in-depth analysis, I discovered that the actual decision space grows combinatorically with the number of moves, leading to an explosive increase in complexity. To understand its computational complexity, I examined a generalized version of this card game. Suspecting the abstracted problem might be NP-Hard, I formally reduced it to the Subset Sum problem, thereby proving that the problem is not only NP-Hard but also NP-Complete. Consequently, exact solutions become computationally infeasible even for moderately sized instances.
 
+> [!NOTE]
+> **Editorial Note regarding NP-hardness Scope:**
+>
+> For a detailed discussion, please refer to [Section 3.2.4 (Relationship Between Optimization Problem, Decision Problem, and Their Variants)](file:///c:/Users/09333/Documents/GitHub/project_manual/EN.md#L692). It is important to clarify that this document rigorously establishes the NP-completeness of the **exact-score decision variant** `CARD_GAME_DEC_EQ` (reachability problem). Because the maximum score under the current gadget is trivially computable, the NP-hardness of the optimization problem and the "$\ge K$" decision problem remains an open question (Open Problem). This does not impact the motivation for the AI surrogate model, which is justified by the combinatorial state space scale.
+
 To address this challenge, I explored a general-purpose solution approach based on a lightweight surrogate model that integrates a Transformer architecture with a genetic algorithm. The core idea is to leverage an exact exhaustive-search algorithm to generate high-quality training samples within a computationally tractable problem scale, then train a computationally inexpensive AI model to mimic the optimal decision-making behavior observed in those samples.
 
 This document is not a formal academic paper, nor does it claim to present rigorously validated academic contributions. Rather, it functions as a  personal portfolio piece within a carefully designed sandbox environment.
@@ -658,6 +663,17 @@ These three have tight computational complexity connections:
 
 2. The "score = K" problem is a special case of the "score ≥ K" problem. Any algorithm that can solve the more general "score ≥ K" problem must correctly handle all its special cases. Therefore, the worst-case time complexity of solving the "score ≥ K" problem must be no less than the complexity of solving the "score = K" problem. Thus, the "score ≥ K" decision problem directly corresponding to the optimization problem is also NP-Hard.
 
+> [!CAUTION]
+> **Editorial Note — Logical Gap in This Step**
+>
+> The argument above is **not a valid reduction**. The claim that "score = K is a special case of score ≥ K" conflates informal algorithmic intuition with formal reducibility. In complexity theory, $L_{=K}$ and $L_{\geq K}$ are two **distinct decision languages** that can produce **different answers on the same input** $(A, B, K)$. For example, if the set of achievable scores is $\{0, 5, 10\}$ and $K = 3$, then $L_{\geq K}$ answers YES (since $10 \geq 3$) while $L_{=K}$ answers NO (since no strategy scores exactly 3). Therefore $L_{=K}$ is **not** a special case of $L_{\geq K}$, and solving $L_{\geq K}$ does not require the ability to solve $L_{=K}$.
+>
+> **The author's own gadget provides a direct counterexample.** In the construction $A = [X],\ B = [X] + S,\ K = 2X + T$, the maximum achievable score is $2X + \text{sum}(S)$, so the $L_{\geq K}$ query reduces to $\text{sum}(S) \geq T$, which is trivially true for all valid Subset Sum instances. The $\geq K$ oracle always answers YES on the image of this reduction—it carries zero information and cannot distinguish YES/NO instances of Subset Sum.
+>
+> Furthermore, one might hope to salvage this step via a Turing (Cook) reduction: determine $\text{score} = K$ by querying $\geq K$ and $\geq K{+}1$. However, ($\geq K$) $\wedge$ $\neg$($\geq K{+}1$) establishes that $\max = K$, **not** that score $K$ is achievable in general—the achievable score set can have gaps below the maximum. The $L_{\geq K}$ oracle is functionally equivalent to a $\max$-oracle (via binary search), and knowing the maximum does not reveal whether intermediate values are attainable. Thus $L_{=K}$ does **not** Turing-reduce to $L_{\geq K}$ either.
+>
+> **Consequence:** Conclusion (i) ($L_{=K}$ is NP-hard) and Conclusion (iii) ($L_{\geq K}$ ↔ OPT via Turing equivalence) are both valid. But **this step**—the bridge from (i) to (ii)—is broken. Whether $L_{\geq K}$ (and equivalently CARD\_GAME\_OPT) is NP-hard remains an **open question** not settled by the current proof.
+
 ***Conclusion ii: The score decision problem of the card game is NP-hard.***
 
 ### Equivalence of Optimization Problem and Its Decision Problem (Turing Equivalence)
@@ -677,6 +693,28 @@ The "score maximization" optimization problem and its directly corresponding "�
 - **(Decision ⇒ Optimization):** If we can solve the "score ≥ K?" decision problem, we can perform binary search over all possible score ranges with time complexity O(log n), and after logarithmic oracle calls, precisely find max_score.
 
 ***Conclusion iii: From a computational difficulty perspective, these two problems are equivalent. Proving the NP-hardness of the "score ≥ K" decision problem is equivalent to proving the NP-hardness of the original optimization problem.***
+
+> **[Annotation — Scope of the NP-hardness result]**
+>
+> A clarification is warranted here regarding what has actually been proven versus what has not, as the chain "score=K variant is NP-hard ⇒ score≥K decision is NP-hard ⇒ the optimization problem is NP-hard" contains a gap that this document does not close.
+>
+> What is rigorously established is that the **exact-equality decision variant** `CARD_GAME_DEC_EQ` ("does a strategy exist whose total score equals exactly K?") is NP-complete. Its reduction from Subset Sum (Section "NP-hardness Proof", Steps 1–3) is sound: under the gadget `A=[X], B=[X]+S`, the question "is K = 2X+T reachable?" is equivalent to "does some subset of S sum to T?", which is precisely Subset Sum.
+>
+> However, **the NP-hardness of the optimization problem (and of the "score ≥ K" decision problem) is *not* proven by this reduction.** The reason lies in the gadget itself: under `A=[X], B=[X]+S`, the optimal score is *trivially computable* in polynomial time. Because the only matchable cards are the two copies of X, the player can always place the *entire* set S between them, yielding a score of `2X + sum(S)` — a closed-form value that depends on no subset-selection decision whatsoever. Consequently:
+>
+> - The "score ≥ K" decision reduces to `sum(S) ≥ T`, a polynomial-time check, and thus provides no hardness.
+> - A Turing reduction from the `=K` variant to the optimization problem (via an oracle returning `max_score`) would, in principle, be the more promising route — but it *also* fails under this gadget, because the oracle degenerates to a plain summation and carries no information about which subsets are reachable. (This was the route attempted in the supplementary notes "多余的图灵归约.txt", which does not yield a valid proof for the same reason: its `MaxSubsetSum` oracle is, by the author's own marginal note, "just a summation", and the resulting greedy `SubsetSumSolver` is an unsound heuristic for Subset Sum.)
+>
+> The deeper obstacle is structural: the game's cascading-match rule (each insertion may trigger a match that deletes a contiguous segment, reshaping A and altering all subsequent matches) makes constructing a **non-trivial gadget** — one whose optimal value genuinely encodes a subset-selection decision rather than being a closed-form constant — highly challenging. Any attempt to make the optimum encode Subset Sum must simultaneously ensure that the post-match residual state of A does not produce incidental matches that push the maximum score up to a trivial upper bound. No such construction has been found to date.
+>
+> Therefore, the defensible scope of the result is:
+>
+> - ✅ The exact-score decision variant `CARD_GAME_DEC_EQ` is NP-complete (proven).
+> - ❌ The optimization problem "maximize total score" being NP-hard is **not proven** in this document; it remains an open question, contingent on finding a non-trivial gadget.
+>
+> This scope limitation does not undermine the rest of the document. The motivation for adopting an AI surrogate model does *not* depend on the NP-hardness of the optimization problem — it rests on the independently-measured decision-space scale (the Monte Carlo estimate of decision-path count and the static combinatorial upper bound), which holds regardless of the problem's worst-case complexity class. The headline claim that the game can be turned into an NP-complete problem is likewise supported by the proven `=K` variant.
+>
+> The line below asserting the optimization problem is NP-hard should therefore be read as an aspirational statement whose proof is not provided here, rather than an established theorem.
 
 The core strategy of this card game, in its various forms, touches the theoretical upper limit of NP problems. Therefore, under the assumption that P≠NP, there exists no efficient (polynomial-time) algorithm to solve this problem.
 

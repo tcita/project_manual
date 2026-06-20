@@ -1,4 +1,4 @@
-# What Happens When You Turn a Card Game into an NP-Complete Problem? (A Personal Exploration )
+# An Exploration Sparked by a Card Game: From an NP-Completeness Conjecture to an AI Surrogate Model (A Personal Exploration )
 
 
 

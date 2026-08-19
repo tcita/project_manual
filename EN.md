@@ -430,7 +430,7 @@ Each step operates on the current version of A, and every insertion of B[i] caus
 
 Thus, we can design a recursive algorithm:
 
-`Recursive_StrategyAndScore(A, B, original_indices=None, move_sequence=None, used_indices=None)` (implementation available at [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/brute_force.py#L16))
+`Recursive_StrategyAndScore(A, B)` (memoized; implementation available at [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/brute_force.py#L16))
 
 which returns: **the theoretical maximum score** and **the corresponding sequence of moves that achieves this maximum score**.
 
@@ -680,8 +680,8 @@ The exact-score decision variant `CARD_GAME_DEC_EQ` is NP-complete, which alread
 
 ### Discussion on Algorithm Optimization / Proposal of Surrogate Modeling
 
-**Caching:**  
-The combinatorial explosion of the decision space leads to an extremely large search space. We have already demonstrated that even for a small-scale instance with `length(A) = 6` and `length(B) = 3`, the decision space remains enormous. Consequently, caching techniques are difficult to apply effectively in implementation, as cache hits are exceedingly rare—a fact already confirmed through experimental validation.
+**Caching (Memoization):**  
+The combinatorial explosion of the decision space leads to an extremely large search space. We have already demonstrated that even for a small-scale instance with `length(A) = 6` and `length(B) = 3`, the decision space (measured as the number of decision paths) remains enormous. However, this does **not** imply that caching is ineffective: the number of decision paths and the number of distinct search states are two different quantities. The recursive search is therefore memoized on the key `(tuple(A), tuple(sorted(B)))`, which collapses many insertion orders that converge to the same state. Experimental validation (10⁴ random instances) shows the score distribution and the returned optimal strategies are **identical** to the non-memoized version, while the number of visited states drops from ~1900 to ~290 per instance (≈6×) and end-to-end runtime improves ~1.7× at this scale. The gain grows with the length of B.
 
 **Dynamic Programming (DP):**  
 The state of list A changes after every insertion, and the content of A itself is highly complex. This makes it challenging to identify overlapping subproblems, which are essential for dynamic programming. Moreover, the dynamic and intricate nature of A’s state renders it unsuitable as a key for DP state storage and retrieval. Therefore, dynamic programming is not applicable to this specific problem.
@@ -1480,7 +1480,7 @@ Number of duplicate records removed: 10,545
 Duplication rate: approximately 0.21%
 ```
 
-This is extremely small and validates the previously discussed issues in the algorithm section regarding the "massive decision space" and the difficulty of designing caching mechanisms.
+This is extremely small and validates the previously discussed "massive decision space" in the algorithm section. Note that this duplication rate measures the *instance* level (the same `(A, B)` occurring across the 5M random samples), which is a different quantity from the memoization hit rate *within* a single recursive search; the two should not be conflated.
 
 Since 5M data is quite large, I converted it to **JSONL format** here, which helps improve efficiency.
 
@@ -2187,8 +2187,6 @@ This is the hockey-stick identity (can be proven by continuously recursively exp
 
 
 ## Author's Q&A 
-
-<!-- note: 可以提一下云训练方法Google colab-->
 
 **Q: Since the special case discussed in this paper can be completely solved by exhaustive search, why use AI?**
 

@@ -629,19 +629,19 @@ During this process, the `Recursive_StrategyAndScore` algorithm generates output
 
 **Hardware:**
 
-- CPU: AMD Ryzen 9 5900HS (8 Cores, 16 Threads)  
-- GPU: NVIDIA GeForce RTX 3050 Laptop (4 GB VRAM)  
-- RAM: 16 GB  
+- CPU: AMD Ryzen 9 8945HX (16 Cores, 32 Threads)  
+- GPU: NVIDIA GeForce RTX 5060 Laptop (8 GB VRAM)  
+- RAM: 32 GB  
 
 **Software:**
 
 - Operating System (OS): Windows 11  
 - IDE: PyCharm  
 - Version Control: Git  
-- Environment Management: conda 25.1.1  
-- Python Version: 3.12.9  
+- Environment Management: uv  
+- Python Version: 3.13.14  
 
-> **Note:** For the problem scale addressed in this work, the 4 GB of GPU memory is not a bottleneck. Although it did influence my choices regarding model hyperparameter configuration, the available hardware is sufficient for the models discussed in this paper.
+> **Note:** For the problem scale addressed in this work, the 8 GB of GPU memory is not a bottleneck. Although it did influence my choices regarding model hyperparameter configuration, the available hardware is sufficient for the models discussed in this paper.
 
 
 #### Model Selection
@@ -729,7 +729,7 @@ The genome is a 6-dimensional weight vector corresponding to six game features:
 - New length  
 - Future score  
 - Sum of elements in the new A  
-- Number of common elements between A and B  
+- Value ratio of the played card to the remaining cards in B  
 
 #### Population Initialization  
 - Population size: 500 individuals  
@@ -761,8 +761,8 @@ The algorithm adaptively selects between these strategies based on historical pe
 
 #### Training Configuration  
 - Population size: 500  
-- Number of generations: 20  
-- Evaluation rounds per individual: 200  
+- Number of generations: 25  
+- Evaluation rounds per individual: 500  
 
 #### Output  
 The six weight parameters (genome) of the best-performing individual, which constitute the AI’s decision-making strategy model.
@@ -799,16 +799,17 @@ The other features are derived from the return values of `simulate_insertion_too
 
 The heuristic function for computing `future_score` follows this logic:
 
-When inserting a card from B into A, after this insertion is performed, the function `calculate_future_score(A, remaining_B)` estimates the future potential score as follows:
+When inserting a card from B into A, after this insertion is performed, the function `calculate_future_score_default(A, remaining_B)` estimates the future potential score as follows:
 
 1. If A and B have **no common elements**, then `future_score = 0`.  
 2. If there are **no remaining cards in B**, then `future_score = 0`.  
-3. If **only one card remains in B**, check whether this card shares any elements with A:  
+3. If **one card remains in B**, check whether this card shares any elements with A:  
    - If yes, call `get_best_insertion_score` ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py)) to compute the best possible score from inserting that card, and use this as `future_score`.  
-   - If not, `future_score = 0`.
+   - If not, `future_score = 0`.  
+4. If **two cards remain in B**, a greedy one-step lookahead is performed: depending on which of the two cards can match A, the function simulates inserting the matching card at its best position (adding the non-matching card into the removed segment when applicable), tries both insertion orders when both cards can match, and returns the better total as `future_score`. (Special case: if both remaining cards share the same value and neither is in A, they can be placed at the two ends of A to match each other, scoring `card1 + card2 + sum(A)`.)
 
 This defines the future score estimation function:  
-**`calculate_future_score(A, remaining_B)`**.
+**`calculate_future_score_default(A, remaining_B)`** ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L279)).
 
 # Core Function Documentation
 

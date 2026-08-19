@@ -359,10 +359,10 @@ $$
 p_t \approx c \cdot \frac{M_t}{y} \quad \text{(for some constant } c\text{)}
 $$
 
-In equilibrium, $M \approx 3/p - 5 \approx 3/p$ (ignoring the constant for scaling analysis). Substituting $p \approx M / y$:
+In equilibrium, $M \approx 3/p - 5 \approx 3/p$ (ignoring the constant for scaling analysis). Substituting $p \approx c \cdot M / y$:
 
 $$
-M \approx \frac{3}{p} \approx \frac{3y}{M} \quad \Rightarrow \quad M^2 \approx 3y
+M \approx \frac{3}{p} \approx \frac{3y}{c \cdot M} \quad \Rightarrow \quad M^2 \approx \frac{3y}{c}
 $$
 
 Therefore, for most of the process (when $y = \Theta(n)$):
@@ -400,7 +400,7 @@ Our analysis characterizes the system's behavior in this steady-state regime and
 
 First, we develop the `simulate_insertion_tool()` function capable of handling the insertion process and scoring. Since array A dynamically changes due to insertions and subsequent matches, when this function is called, the input length of A is no longer the initial length of 6, but rather ranges from 0 to 8 (as A can only be in the range 0–8 when `insertion` might be called—A cannot be negative, and when A reaches length 9, B becomes empty and no further elements can be inserted from B). After insertion and any resulting matches, A's length will be in the range 0–9.
 
-We define the function `simulate_insertion_tool(A, b, pos)` (The implementation in [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L41)), which inserts element `b` into list `A` at the specified position `pos` and handles any matching that may occur.
+We define the function **`simulate_insertion_tool(A, b, pos)`** ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L41)), which performs the insertion and handles any resulting match.
 
 The function returns: `[score, length_removed_due_to_matching, new_length_of_A, match_occurred (0 or 1), new_A]`.
 
@@ -771,7 +771,7 @@ This trade-off must be evaluated based on the performance of models trained unde
 
 Therefore, we now assume by default that the dataset has undergone padding processing; specific analytical details will be discussed thoroughly in the AI model evaluation.
 
-Since A and B are randomly generated using the `deal_cards_tool`, the dataset needs to be deduplicated, which can be accomplished using Python's `set`. Subsequently, a detailed inspection of the data format, along with exception handling, is required ( [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/json/dedpu.py#L4) for details).
+Since A and B are randomly generated using the `deal_cards_tool`, the dataset needs to be deduplicated via Python's `set`, followed by format inspection and exception handling ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/json/dedpu.py#L4)).
 
 Finally, we obtain the dataset for the genetic algorithm, named `data_GA.json`, containing 10,000 samples. Here is an example sample:
 
@@ -784,7 +784,7 @@ Finally, we obtain the dataset for the genetic algorithm, named `data_GA.json`, 
 }
 ```
 
-The dataset for the Transformer, `data_TR.json`, is generated and processed in the same way (see the code in `Get_trainingset_huge.py`[source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Get_trainingset_huge.py)). However, due to its large size, multiprocessing is employed to accelerate data generation, and the resulting JSON files are subsequently converted to JSONL format to support streaming loading. The number of samples was initially set to 5 million before deduplication.
+The Transformer dataset `data_TR.json` is generated and processed the same way ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Get_trainingset_huge.py)); due to its size, multiprocessing accelerates generation, and the JSON is converted to JSONL for streaming loading (5 million samples before deduplication).
 
 ## 2.1 Implementation of the Genetic Algorithm
 
@@ -1368,7 +1368,7 @@ For each round of generated `A` and `B`:
 
 ### Calculate true score:
 - The model returns only the strategy (`move`) it considers best, **not the score predicted by the model itself**.
-- Using the `strategy_TrueScore(A, B, move)` function (implementation in code_path), which is a function that calculates the score based on the move, the entire card-playing process is simulated step by step according to the move returned by the model, and the **actual total score** that this strategy can achieve is calculated.
+- The actual score is then computed by simulating the moves step by step via `strategy_TrueScore(A, B, move)` (implementation in [code_path](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L7)).
 
 ### Record runtime:
 - The `TestModel_with_given_A_B` function precisely records the time each model takes from receiving data to returning a strategy, used to evaluate the computational efficiency of the model.

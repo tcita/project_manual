@@ -732,7 +732,7 @@ The genome is a 6-dimensional weight vector corresponding to six game features:
 - Value ratio of the played card to the remaining cards in B  
 
 #### Population Initialization  
-- Population size: 500 individuals  
+- Population size: 1000 individuals  
 - 70% initialized within heuristic ranges, 30% completely random  
 - Diversity is introduced to prevent premature convergence  
 
@@ -760,9 +760,9 @@ The algorithm adaptively selects between these strategies based on historical pe
 - **Early stopping**: Termination if no improvement is observed over consecutive generations  
 
 #### Training Configuration  
-- Population size: 500  
-- Number of generations: 25  
-- Evaluation rounds per individual: 500  
+- Population size: 1000  
+- Number of generations: 50  
+- Evaluation rounds per individual: 1000  
 
 #### Output  
 The six weight parameters (genome) of the best-performing individual, which constitute the AI’s decision-making strategy model.
@@ -922,9 +922,9 @@ def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio,
 After testing, these parameters have yielded sufficiently good results:
 
 ```python
-pop_size = 500
-generations = 25
-num_rounds = 500
+pop_size = 1000
+generations = 50
+num_rounds = 1000
 elitism_ratio = 0.1
 tournament_size = 3
 evolution_methods = ['island', 'standard']
@@ -936,20 +936,20 @@ early_stop_threshold = 0.01
 
 Next, let's analyze the obtained best genome. The following is based on one of my test datasets.
 
-This is a genome obtained after training. The model terminated at generation 16 due to early stopping:
+This is a genome obtained after training with the larger configuration (population 1000, up to 50 generations, 1000 evaluation rounds per individual). The model terminated at generation 19 due to early stopping:
 
 ```python
-[2.5638819522632654, 0.30592210650063667, -1.1848400755378474, 
- 4.178412919525965, -1.4191214580170772, -0.09006199513519475]
+[2.7204994990683677, 1.2069373027571444, 0.10155017881584388, 
+ 2.5066066634177573, 1.2109425844208044, -4.472694255836292]
 ```
 
 ### Performance Analysis of Evolution Methods
 
 ```
-island method: average fitness = 49.33, max fitness = 49.90, 
-               improvement rate = 0.14%, usage count = 6
-standard method: average fitness = 49.50, max fitness = 50.30, 
-                 improvement rate = 4.27%, usage count = 9
+island method: average fitness = 46.23, max fitness = 46.76, 
+               improvement rate = 2.29%, usage count = 10
+standard method: average fitness = 46.34, max fitness = 46.99, 
+                 improvement rate = 3.41%, usage count = 8
 ```
 
 This indicates that both standard genetic algorithm and island model evolution are effective.
@@ -962,35 +962,35 @@ The final improvement rates are all relatively low, indicating that the first ge
 
 ```
 Genome Feature Weights:
-Current score: 2.5639
-Removed length: 0.3059
-New length: -1.1848
-Future score: 4.1784
-Sum of new A elements: -1.4191
-Value ratio of played card to remaining cards in B: -0.0901
+Current score: 2.7205
+Removed length: 1.2069
+New length: 0.1016
+Future score: 2.5066
+Sum of new A elements: 1.2109
+Value ratio of played card to remaining cards in B: -4.4727
 ```
 
 Returning to the genome itself, analyzing the weights of its final features:
 
-#### Feature 1: Current Score (2.5639)
+#### Feature 1: Current Score (2.7205)
 This weight is very high and positive, indicating that the algorithm highly values the score that can be directly obtained from the current operation.
 
-#### Feature 2: Removed Length After Matching at This Position (0.3059)
-This weight is a low positive value, indicating that the algorithm tends to remove fewer elements. This suggests the algorithm tends to avoid removing too many elements. This may be because retaining more elements can provide more possibilities for future moves.
+#### Feature 2: Removed Length After Matching at This Position (1.2069)
+This weight is clearly positive, indicating that the algorithm tends to remove a longer matched segment. Removing more elements reduces A's length and shortens future simulations, which trades immediate gains against future opportunities.
 
-#### Feature 3: New Length (-1.1848)
-Negative value, indicating the algorithm tends to obtain a shorter new A after insert-match operation. This seems to align with the tendency of Feature 2's weight.
+#### Feature 3: New Length (0.1016)
+A small positive value close to zero, indicating that after the insert-match operation the algorithm is largely indifferent to the resulting length of A on its own; the decisive factors are the score obtained and the composition of the remaining cards.
 
 >Although the values of Feature 2 and Feature 3 can be obtained through simple mathematical calculation (length of new A = length of old A - length removed due to matching), I cannot guarantee that the AI algorithm can detect this relationship. Moreover, these two states represent different perspectives, so I prefer to retain them. This feature may bring performance improvement or accelerate model convergence.
 
-#### Feature 4: Future Score (4.1784)
-This weight is very high and positive, indicating that the algorithm highly values the impact of moves on possible future scores, demonstrating strong foresight.
+#### Feature 4: Future Score (2.5066)
+This weight is high and positive, indicating that the algorithm highly values the impact of moves on possible future scores, demonstrating strong foresight.
 
-#### Feature 5: Sum of Elements in New A (-1.4191)
-The weight is a relatively high negative value, possibly indicating that the algorithm not only considers current score, but also that retaining fewer scoring possibilities may allow subsequent operations to gain advantages.
+#### Feature 5: Sum of Elements in New A (1.2109)
+A moderately positive weight, suggesting that the algorithm slightly prefers keeping larger-valued cards in A, since they provide higher potential scoring material for subsequent matches.
 
-#### Feature 6: Value Ratio of Moved Card to Remaining Cards in B (-0.0901)
-This feature indicates whether the algorithm tends to play high-value cards first or low-value cards first. The data this time shows a weight close to 0, with very small impact. However, in some tests, this value is less than -1, indicating this feature may achieve some balance with other features.
+#### Feature 6: Value Ratio of Moved Card to Remaining Cards in B (-4.4727)
+A large-magnitude negative weight. This feature indicates whether the algorithm tends to play high-value cards first or low-value cards first; here the strongly negative weight means it prefers playing cards with low value relative to the remaining hand first, reserving high-value cards for later to maximize future matching potential.
 
 
 Then we need to evaluate our genetic algorithm and obtained genome under given real A and B. However, this part will be placed later and evaluated together with the transformer model.

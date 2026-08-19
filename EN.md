@@ -71,7 +71,7 @@ This section presents the Unity client architecture and live gameplay demonstrat
 
 
 
-### Game Rules and Gameplay Example
+## Game Rules and Gameplay Example
 
 The game rules are somewhat similar to **"Tile Matching"** (card game). Players score points by pairing cards to eliminate them. When it's the computer's turn, the current game state is captured, and the dynamic card layout data is sent to a local AI server. The AI returns its predicted optimal move, which is then automatically executed and displayed to the user on the client side. After three rounds, the player with the higher total score wins.
 
@@ -160,7 +160,7 @@ The game rules are somewhat similar to **"Tile Matching"** (card game). Players 
 * **Example:** Total Score = Score₁ + Score₂ + Score₃ = 10 + 0 + 23 = 33.
 
 
-### Exhaustive Recursive Algorithm Analysis
+## Exhaustive Recursive Algorithm Analysis
 
 To compute the optimal strategy for a given pair of lists **A** and **B**, we first clarify the following key concepts:
 
@@ -205,7 +205,7 @@ First, we perform a generalized mathematical analysis of the problem:
 
 ---
 
-### Strategy Evaluation Complexity:  
+## Strategy Evaluation Complexity:  
 This computes the time complexity required to determine the outcome—according to the game rules—given arrays A and B and a specified insertion position(strategy).
 
 For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose **|B| = n** and **|A| = m**. In the first step, there are **n** choices for which element to insert, and for each such choice, there are **m+1** possible insertion positions. Thus, there are $n \cdot (m+1)$possible  paths at the first level.
@@ -214,7 +214,7 @@ After inserting an element at an arbitrary position, let **p** denote the probab
 
 ---
 
-### Expected Length of the Removed Subsequence Upon a Match
+## Expected Length of the Removed Subsequence Upon a Match
 
 We now analyze the expected length of the subsequence removed when a match occurs.
 
@@ -250,7 +250,7 @@ $$
 
 ---
 
-### Expected Matching Probability Over Time
+## Expected Matching Probability Over Time
 
 Now consider the matching probability dynamics.
 
@@ -299,7 +299,7 @@ This behavior aligns with intuition and stabilizes the system.
 
 ---
 
-### State Evolution Model
+## State Evolution Model
 
 Define **M_t** as the length of **A** at the beginning of step **t**. The system evolves as:
 
@@ -322,7 +322,7 @@ Thus, **M_t** neither explodes nor collapses to zero, but fluctuates around a **
 
 ---
 
-### Steady-State Analysis
+## Steady-State Analysis
 
 Assume the system reaches a steady state where the expected length remains constant: $\mathbb{E}[M_t] \approx M$ for all **t**. Approximate $p_t \approx p$ as a constant depending only on **M** and the current size of **B** (denoted **y**).
 
@@ -340,7 +340,7 @@ $$
 
 ---
 
-### Estimating the Equilibrium Length
+## Estimating the Equilibrium Length
 
 To estimate **p** and locate the balance point, we adopt a **mean-field approximation**:
 
@@ -625,7 +625,7 @@ During this process, the `Recursive_StrategyAndScore` algorithm generates output
 
 # Part II: AI Technical Details
 
-#### Software and Hardware Specifications
+## Software and Hardware Specifications
 
 **Hardware:**
 
@@ -644,7 +644,7 @@ During this process, the `Recursive_StrategyAndScore` algorithm generates output
 > **Note:** For the problem scale addressed in this work, the 8 GB of GPU memory is not a bottleneck. Although it did influence my choices regarding model hyperparameter configuration, the available hardware is sufficient for the models discussed in this paper.
 
 
-#### Model Selection
+## Model Selection
 
 I selected the **Transformer** [3] and **Genetic Algorithm (GA)** [4] as AI models to explore this problem.
 
@@ -716,7 +716,7 @@ Finally, we obtain the dataset for the genetic algorithm, named `data_GA.json`, 
 
 The Transformer dataset `data_TR.json` is generated and processed the same way ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Get_trainingset_huge.py)); due to its size, multiprocessing accelerates generation, and the JSON is converted to JSONL for streaming loading (5 million samples before deduplication).
 
-## 2.1 Implementation of the Genetic Algorithm
+## 2. Implementation of the Genetic Algorithm
 
 The code implementation can be found at: [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/GA.py)
 
@@ -898,7 +898,7 @@ A large-magnitude negative weight. This feature indicates whether the algorithm 
 The evaluation of this genetic algorithm and its best genome under given real A and B instances is deferred to the model comparison section, where it is assessed together with the Transformer model.
 
 
-## 2.2 Implementation of the Transformer Model Algorithm
+## 3. Implementation of the Transformer Model Algorithm
 
 I employed a standard Transformer model. During training, the inputs are **A**, **B**, and $best\_moves$. During inference, **A** and **B** serve as input features, while $best\_move$ acts as the target label for computing the loss function, thereby guiding model optimization (i.e., the supervised learning target).
 
@@ -1179,34 +1179,34 @@ According to my actual training results:
 
 Now that we have completed the training of both the **Genetic Algorithm (GA)** and the **Transformer**, we will proceed to **compare the results obtained from these two models**.
 
-## Evaluation Process Introduction
+## 4. Evaluation Process Introduction
 
 
 I evaluate the two models as follows:
 
 The entire evaluation process is driven by the core function `Compare_TwoModel(model, other_model, rounds)` (implementation in [code_path](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/two_model_comparing.py#L130)), which can be broken down into the following key steps:
 
-### 1. Initialization and Loop Testing
+### Step 1: Initialization and Loop Testing
 
 - **Set test rounds**: The function receives a `rounds` parameter that determines how many independent tests to perform. Here, the number of tests is **20,000**.
 - **Loop to generate test cases**: In each iteration, a new set of test data `A` and `B` is generated through the `deal_cards_tool()` function (implementation in [code_path](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L125)). The data in each round is randomly independent, ensuring the generalization ability of the model evaluation.
 
-### 2. Model Prediction and Performance Recording
+### Step 2: Model Prediction and Performance Recording
 
 For each round of generated `A` and `B`:
 
-### Call models to obtain strategies:
+#### Call models to obtain strategies:
 - The `TestModel_with_given_A_B(model, A, B)` function (implementation in [code_path](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/two_model_comparing.py#L61)) is used separately to test the genome model and the Transformer model.
 - Inside this function, each model predicts the best three-step operation strategy `move` based on the current state of `A` and `B`. This `move` defines which card from `B` should be played first and at which position in `A` it should be inserted.
 
-### Calculate true score:
+#### Calculate true score:
 - The model returns only the strategy (`move`) it considers best, **not the score predicted by the model itself**.
 - The actual score is then computed by simulating the moves step by step via `strategy_TrueScore(A, B, move)` (implementation in [code_path](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L7)).
 
-### Record runtime:
+#### Record runtime:
 - The `TestModel_with_given_A_B` function precisely records the time each model takes from receiving data to returning a strategy, used to evaluate the computational efficiency of the model.
 
-### 3. Obtaining "Ground Truth"
+### Step 3: Obtaining "Ground Truth"
 
 In each round, the code also calls the previously mentioned `recursive_StrategyAndScore()` function, which uses **exhaustive recursive search** to calculate:
 - The **theoretical maximum score** (`true_score`) achievable under the current combination of `A` and `B`
@@ -1214,22 +1214,22 @@ In each round, the code also calls the previously mentioned `recursive_StrategyA
 
 This evaluates both models against the best possible outcome.
 
-### 4. Data Aggregation and Analysis
+### Step 4: Data Aggregation and Analysis
 
 When all `rounds` are completed, the code collects three core datasets: the score list of the genome model, the score list of the Transformer model, and the list of theoretical maximum scores for each round. Next, detailed data analysis is performed:
 
-### Descriptive Statistics (`compute_statistics`):
+#### Descriptive Statistics (`compute_statistics`):
 For each model's score list and the ground truth list, basic statistical data is calculated and printed:
 - **Mean**: Average performance of the model
 - **Median**: Typical performance excluding the influence of extreme values
 - **Standard Deviation (std_dev)**: Stability of model performance. Smaller standard deviation indicates more stable model performance
 - **Min/Max**: Upper and lower bounds of model performance
 
-### Mean Squared Error (MSE):
+#### Mean Squared Error (MSE):
 - Calculates the mean squared error between each model's scores and the true maximum scores
 - MSE effectively measures the magnitude of prediction deviation; smaller values indicate results closer to the optimal solution
 
-### Inferential Statistical Tests (`compute_statistical_tests`):
+#### Inferential Statistical Tests (`compute_statistical_tests`):
 
 Analyzes the **bias** between model scores and ground truth.
 
@@ -1241,17 +1241,17 @@ Analyzes the **bias** between model scores and ground truth.
 - The t-test only tells us whether the difference is "significant," but doesn't indicate how "large" this difference is
 - Cohen's d measures the **actual size or impact degree** of the difference (very small, small, medium, large)
 
-## Visualization Analysis
+## 5. Visualization Analysis
 
-### 1. Violin Plot
+### Violin Plot
 - **Purpose**: Display the **complete distribution** of three datasets (ground truth, Algorithm 1 scores, Algorithm 2 scores)
 
-### 2. Bias Bar Chart
+### Bias Bar Chart
 - **Purpose**: Observe the bias patterns of models across different score ranges and the number of samples in each score range
 
 The bias bar chart is designed with the y-axis scale aligned with the violin plot. Leveraging the violin plot's characteristic of intuitively displaying the distribution of predicted scores, it becomes easy to visually see the distribution of prediction data falling within a certain score range relative to all prediction data, and to understand the average bias of that score range.
 
-## Dataset Preprocessing: "Padding" and "Skipping" (Ablation Study)
+## 6. Dataset Preprocessing: "Padding" and "Skipping" (Ablation Study)
 
 Now we can return to the issue of handling `best_move` entries in the training set that are not strictly length 3. (This arises from exhaustive recursion - for example, after the second operation, no matter how the third card is played, no points can be scored. In this case, the returned `best_move` has length 2 instead of 3. Testing shows that cases where `best_move` length is not strictly 3 account for approximately **10%** of the training set.)
 
@@ -1321,14 +1321,14 @@ Here, **Algorithm 1** represents the Genetic Algorithm model and **Algorithm 2**
 
 Running the comparison function with **5,000 test rounds**, the following statistical data was obtained:
 
-## Statistical Data Comparison Analysis Table
+## 7. Statistical Data Comparison Analysis Table
 
 **Test Configuration:** 20,000 test rounds  
 **Comparison Objects:** Algorithm 1 (GA) vs Algorithm 2 (Transformer) vs Ground Truth
 
 ---
 
-## Algorithm Performance Comparison
+## 8. Algorithm Performance Comparison
 
 ### Table 1: Performance Metrics
 
@@ -1366,36 +1366,36 @@ Running the comparison function with **5,000 test rounds**, the following statis
 
 ---
 
-## Comprehensive Performance Analysis
+## 9. Comprehensive Performance Analysis
 
 From the experimental data, **Transformer (Algorithm 2)** significantly outperforms **GA (Algorithm 1)** across multiple key metrics, particularly excelling in prediction accuracy and bias control.
 
-### 1. Prediction Accuracy and Error
+### Prediction Accuracy and Error
 
 - **Mean Squared Error (MSE)**: Transformer's MSE is **14.23**, far lower than GA's **102.33**, indicating that Transformer's predictions are much closer to ground truth with higher accuracy.
 
 - **Bias analysis** further supports this: Transformer's mean bias is only **-0.70**, while GA's mean bias reaches **-6.89**. Additionally, Transformer's median bias is **0.00**, indicating that the distribution center of its predictions is completely aligned with ground truth, whereas GA's median bias is **-5.00**, showing clear systematic bias.
 
-### 2. Computational Efficiency
+### Computational Efficiency
 
 - In terms of **runtime**, GA's average runtime is **38.38 seconds**, while Transformer's runtime is **80.71 seconds**. The runtime ratio is approximately **1:2.07**. GA's execution speed is significantly faster than Transformer.
 
-### 3. Statistical Significance and Effect Size
+### Statistical Significance and Effect Size
 
 - **Paired t-test** results show that differences between both algorithms' predictions and ground truth are statistically significant ($p < 0.05$). However, **effect size analysis (Cohen's d)** reveals the actual magnitude of impact:
   - GA's Cohen's d is **-0.931**, indicating a large deviation between its predictions and ground truth
   - Transformer's Cohen's d is only **-0.189**, indicating an extremely small deviation between its predictions and ground truth, which is almost negligible
 
-### 4. Extreme Value Handling
+### Extreme Value Handling
 
 - In predicting **minimum scores**, both algorithms show certain deviations, with Transformer's minimum score bias reaching **-53**, larger than GA's **-42**. This may indicate that Transformer still needs improvement in extreme value prediction. However, both algorithms have **0 bias** for maximum score predictions, suggesting comparable performance in the high-score range.
 
-## Visualization Analysis and Ablation Study Results
+## 10. Visualization Analysis and Ablation Study Results
 
-## Figure 1 Analysis: Padding Strategy 
+### Figure 1 Analysis: Padding Strategy 
 
 ![](Figure_1.png)
-### Left Plot: Score Distribution 
+#### Left Plot: Score Distribution 
 
 This plot displays the overall distribution of ground truth scores and predicted scores from both algorithms.
 
@@ -1422,7 +1422,7 @@ This plot displays the overall distribution of ground truth scores and predicted
 
 ---
 
-### Right Plot: Mean Prediction Bias by True Score Interval
+#### Right Plot: Mean Prediction Bias by True Score Interval
 
 This plot provides deeper bias analysis by dividing data into 5-point intervals based on true scores (Y-axis), then calculating the average difference between algorithm predictions and ground truth within each interval (i.e., mean bias = predicted value - true value).
 
@@ -1449,7 +1449,7 @@ This plot provides deeper bias analysis by dividing data into 5-point intervals 
 
 ---
 
-## Overall Conclusion
+## 11. Overall Conclusion
 
 **Algorithm 2 is significantly superior to Algorithm 1 in prediction accuracy and is the better choice.** Although Algorithm 2's runtime is much longer than Algorithm 1, its prediction results align well with ground truth across all core metrics with smaller errors.
 
@@ -1457,7 +1457,7 @@ This plot provides deeper bias analysis by dividing data into 5-point intervals 
 
 ---
 
-## Comparison of "Padding" vs "Skipping" (Ablation Study)
+## 12. Comparison of "Padding" vs "Skipping" (Ablation Study)
 
 Now we return to using the "skipping" method to process the dataset and perform the same statistical analysis.
 
@@ -1518,7 +1518,7 @@ Comparing Figure_1.png with Figure_3.png, we can intuitively observe from the pl
 
 ---
 
-## Ensemble Model Proposal
+## 13. Ensemble Model Proposal
 
 Since these two models have different training methods, I hypothesized they focus on different aspects. When Transformer predicts poor results, GA might perform better. Moreover, GA is very fast, so integrating GA into Transformer wouldn't cause much additional time consumption.
 
@@ -1588,25 +1588,25 @@ Similarly, let's examine the evaluation results of the current Transformer + GA 
 By observing the violin plot and bias bar chart, we can intuitively perceive the improvement in prediction accuracy of our ensemble model.
 
 
-## Ensemble Model Code Performance Optimization
+## 14. Ensemble Model Code Performance Optimization
 
 Now, based on the above discussion, let's try to use the newly obtained Transformer + GA model to challenge the original exhaustive recursive algorithm in terms of running speed (we've already analyzed accuracy, and exhaustive recursion yields the ground truth).
 
 **Important Note:** The batch processing discussion here is based on Transformer + GA's offline computation with large data volumes. However, it is **not suitable for real-time processing scenarios** requiring low latency, immediacy, and small single-request data volumes (such as our game).
 
-## Characteristics of the Ensemble Model
+### Characteristics of the Ensemble Model
 
 For this Transformer + GA ensemble model:
 
 - **Genetic Algorithm (GA):** Its prediction logic is greedy and serial, not suitable for batch prediction.
 - **Transformer Model:** Its model architecture and computation method are parallel, very suitable for GPU batch prediction (this is one of the advantages of neural networks).
 
-## Implementation Strategy
+### Implementation Strategy
 
-### Transformer Batch Processing
+#### Transformer Batch Processing
 Convert Transformer's prediction to batch processing.
 
-### Parallel Execution with Threading
+#### Parallel Execution with Threading
 Use `ThreadPoolExecutor` to launch two threads: one for GA and one for Transformer for parallel prediction.
 - GA is **CPU-intensive**
 - Transformer is **GPU-intensive**
@@ -1621,7 +1621,7 @@ This approach effectively utilizes hardware performance. Although the code is af
 - Although both tasks run on CPU, because PyTorch and NumPy libraries release the GIL during their core computation parts, the GA thread can still acquire the GIL and get execution opportunities while the Transformer thread waits for its C++ backend to complete computation
 - While this isn't perfect hardware parallelism, it's still much faster than serial execution
 
-## Batch Ensemble Model Prediction Function
+### Batch Ensemble Model Prediction Function
 
 ```python
 def Transformer_predict_batch_plus_GA(A_batch, B_batch, genomeforassist, TR_model, 
@@ -1643,7 +1643,7 @@ Returns:
 """
 ```
 
-## Timing Function
+### Timing Function
 
 ```python
 def execution_time()  (Implementation in https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Trans.py#L1026)
@@ -1666,7 +1666,7 @@ def black_hole(value):
 
 ---
 
-## Experimental Results and Analysis
+### Experimental Results and Analysis
 
 After 20,000 iterations, here are my results (batch_size is 2048, same as training):
 
@@ -1704,7 +1704,7 @@ $$48.7 + 63.1 = 111.8 \text{ seconds}$$
 
 This demonstrates that with proper optimization (batching and parallelization), the ensemble model can achieve both high accuracy and competitive runtime performance, making it practical for large-scale offline processing scenarios.
 
-## Analysis of Modeling Paradigm Conflicts and Inductive Biases in Transformers
+## 15. Analysis of Modeling Paradigm Conflicts and Inductive Biases in Transformers
 
 I attempted to include the `max_score` from the training set (i.e., the score corresponding to the optimal play strategy, which represents the highest possible score at that moment) in the training process, using A and B as inputs and `max_score` as the target. When examining solely the accuracy of the predicted `max_score`, the results were excellent. The difference between the model's predicted scores and the actual values was generally minimal.
 
@@ -1714,7 +1714,7 @@ I also attempted to include `max_score` as an additional auxiliary feature to gu
 
 Additionally, it is necessary to examine the permutation invariance issue. One might question: does this problem truly require permutation invariance? My answer is affirmative. Reviewing the game rules, for the same A and B, the maximum score obtainable remains the same regardless of any arbitrary ordering.
 
-## Permutation Invariance Test
+### Permutation Invariance Test
 
 Using a sample with A and B that fully meets the requirements, I generated all permutations of B while keeping other data unchanged, combining them with the original sample to expand the test set. I then tested the Transformer model using this test set. If the test results are consistent with the original sample, this indicates the model is permutation-invariant.
 
@@ -1740,17 +1740,17 @@ A:[6, 5, 9, 11, 10, 13], B: [7, 3, 6], Transformer result: 12, Recursive result:
 
 Comparing the different Transformer predictions within the same sample combination against the constant true theoretical maximum score is sufficient to refute the claim that the Transformer model is permutation-invariant.
 
-## Conclusion
+### Conclusion
 
 After detailed code review, a clear conclusion can be drawn: this TransformerMovePredictor model is highly sensitive to the element order of input sequence B. For the same hand, different initial permutation orders will lead the model to generate different feature inputs and ultimately different strategy predictions. By design, this model is not "Permutation-Invariant."
 
 
 
-## Root Cause Analysis
+### Root Cause Analysis
 
 This order sensitivity stems from two levels: data processing and model architecture:
 
-### Order Dependency at the Feature Engineering Level
+#### Order Dependency at the Feature Engineering Level
 
 The `future_score` feature introduces explicit order dependency when generating feature vectors for each card element.
 
@@ -1758,7 +1758,7 @@ The `future_score` feature introduces explicit order dependency when generating 
 
 - **Example**: For hand B = [10, 20, 30], when calculating features for element 10, its "future" hand is [20, 30]. However, for hand B = [30, 20, 10], when calculating features for element 10, its "future" hand is an empty set []. This results in the same card element having completely different feature vectors input to the model under different input orders.
 
-### Order Sensitivity at the Model Architecture Level
+#### Order Sensitivity at the Model Architecture Level
 
 The Transformer architecture itself is designed to process ordered sequences, and its core components reinforce order dependency.
 
@@ -1766,7 +1766,7 @@ The Transformer architecture itself is designed to process ordered sequences, an
 
 - **Self-Attention Mechanism**: This mechanism updates each element's representation by computing the interrelationships among all elements in the sequence. The entire computation process is global and depends on both relative and absolute positions of elements. Any change in input order will completely alter the distribution of attention scores, leading to differences in final output.
 
-### Considerations on Current Model's Generalization Feasibility
+#### Considerations on Current Model's Generalization Feasibility
 
 The conflict between standard Transformer's modeling paradigm and the original problem cannot be ignored. Moreover, at higher data scales, both the current Transformer and GA features may struggle to adapt, especially the `future_score` feature—which is crucial in the current special case—is customized based on the assumption that both A and B are very small in length. It implicitly assumes length(B) ≤ 3.
 
@@ -1775,7 +1775,7 @@ When A and B are very large:
 - Additionally, obtaining large-scale training sets with high data volume may be very difficult
 - The lack of permutation invariance leads to weak robustness
 
-### Potential Solutions and Their Trade-offs
+#### Potential Solutions and Their Trade-offs
 
 **Solution 1: Test-Time Augmentation (TTA)**
 Of course, we can use an approach similar to ensemble GA: compute all permutations of B, then make predictions for each B permutation combined with A, and take the maximum predicted result to mask the permutation invariance problem. One specific method is TTA (Test-Time Augmentation). However, this brings length(B)! times the number of predictions, resulting in much higher runtime.
@@ -1784,7 +1784,7 @@ Of course, we can use an approach similar to ensemble GA: compute all permutatio
 If we modify the model architecture, we can resolve order sensitivity. For example, using Set Transformer ideas: remove positional encoding and use permutation-invariant aggregation functions, instructing the model to treat B as an unordered set. However, the problem is that B is unordered while A is ordered—this may require a hybrid model architecture.
 
 
-### Failed Attempts
+#### Failed Attempts
 
 I conducted several attempts based on these ideas. The main concept was to **transform the handling of the cards-to-be-played group (B cards) from an "ordered sequence" to an "unordered set"**.
 
@@ -1816,9 +1816,9 @@ Then Docker is used to containerize the server. This packages it with its runtim
 
 
 
-### Unity Project Architecture
+## Unity Project Architecture
 
-#### Server Containerization and Usage
+### Server Containerization and Usage
 
 Unity was chosen as the tool for building the game client mainly because it is a game engine that provides convenience for game development, with relatively simple and easy-to-use functions that are also powerful enough.
 
@@ -1859,7 +1859,7 @@ docker load -i gameserver_v1.tar
 docker run -p 5000:5000 --name gameserver gameserver:1.0
 ```
 
-#### Unity Frontend Architecture
+### Unity Frontend Architecture
 
 Unity's programming paradigm differs significantly from general software development. Unity's C# script code is deeply coupled with Unity's own components. To fully understand the functionality of a piece of code, one must first have a certain understanding of the Unity engine itself.
 
@@ -1867,7 +1867,7 @@ I developed based on the Unity community framework [2], where the key points at 
 
 Using draw.io to create C4 model drafts, then writing DSL scripts and rendering them as PNG format images:
 
-#### C4 Model Architecture Diagrams
+### C4 Model Architecture Diagrams
 
 <style>
   /* This is CSS styling that tells the PDF renderer how to handle images */
@@ -1884,15 +1884,15 @@ Using draw.io to create C4 model drafts, then writing DSL scripts and rendering 
 
 <img src="c1.png" alt="level 1">
 
-### Context Diagram
+#### Context Diagram
 
 <img src="c2.png" alt="level 2">
 
-### Container Diagram
+#### Container Diagram
 
 <img src="c3.png" alt="level 3">
 
-### Component Diagram
+#### Component Diagram
 
 Here are some examples of design patterns used in this Unity client:
 
@@ -1915,7 +1915,7 @@ For example:
 - Whether it is the player's hand card (the player cannot move the computer's hand cards)
 - Whether it is in the discard pile (cards in the discard pile cannot be operated on anymore)
 
-#### Game Demo Demonstration
+### Game Demo Demonstration
 
 ![Game Demo 1](1.png)
 
@@ -1962,7 +1962,7 @@ Opening the server log, we can observe that the computer's actual card-playing s
 
 # Part IV: Appendix, Author's Self-Reflection (Q&A), and Other Supplementary Materials
 
-### Appendix:
+## Appendix:
 
 **Special Tree Structure :**
 

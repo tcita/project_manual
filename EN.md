@@ -834,7 +834,7 @@ early_stop_generations = 3
 early_stop_threshold = 0.01
 ```
 
-## Genome Analysis
+### Genome Analysis
 
 Next, let's analyze the obtained best genome. The following is based on the freshly generated training dataset (`data_GA_fill.json`, 10,000 samples).
 
@@ -845,7 +845,7 @@ This is a genome obtained after training with the larger configuration (populati
  2.5066066634177573, 1.2109425844208044, -4.472694255836292]
 ```
 
-### Performance Analysis of Evolution Methods
+#### Performance Analysis of Evolution Methods
 
 ```
 island method: average fitness = 46.23, max fitness = 46.76, 
@@ -860,7 +860,7 @@ I conducted multiple tests, and it's not certain which method has higher improve
 
 The best fitness improved from 45.69 at the first generation to 46.99 at generation 16 (where it peaked), then fluctuated within a narrow band until early stopping at generation 19. The modest total gain (~2.8%) reflects the effective warm start initialization, which seeds 70% of the population with score- and future-score-biased weights, as well as the inherent noise of evaluating each genome on random games.
 
-### Feature Weight Analysis
+#### Feature Weight Analysis
 
 ```
 Genome Feature Weights:
@@ -874,31 +874,31 @@ Value ratio of played card to remaining cards in B: -4.4727
 
 Returning to the genome itself, analyzing the weights of its final features:
 
-#### Feature 1: Current Score (2.7205)
+##### Feature 1: Current Score (2.7205)
 This weight is very high and positive, indicating that the algorithm highly values the score that can be directly obtained from the current operation.
 
-#### Feature 2: Removed Length After Matching at This Position (1.2069)
+##### Feature 2: Removed Length After Matching at This Position (1.2069)
 This weight is clearly positive, indicating that the algorithm tends to remove a longer matched segment. Removing more elements reduces A's length and shortens future simulations, which trades immediate gains against future opportunities.
 
-#### Feature 3: New Length (0.1016)
+##### Feature 3: New Length (0.1016)
 A small positive value close to zero, indicating that after the insert-match operation the algorithm is largely indifferent to the resulting length of A on its own; the decisive factors are the score obtained and the composition of the remaining cards.
 
 >Although the values of Feature 2 and Feature 3 can be obtained through simple mathematical calculation (length of new A = length of old A - length removed due to matching), I cannot guarantee that the AI algorithm can detect this relationship. Moreover, these two states represent different perspectives, so I prefer to retain them. This feature may bring performance improvement or accelerate model convergence.
 
-#### Feature 4: Future Score (2.5066)
+##### Feature 4: Future Score (2.5066)
 This weight is high and positive, indicating that the algorithm highly values the impact of moves on possible future scores, demonstrating strong foresight.
 
-#### Feature 5: Sum of Elements in New A (1.2109)
+##### Feature 5: Sum of Elements in New A (1.2109)
 A moderately positive weight, suggesting that the algorithm slightly prefers keeping larger-valued cards in A, since they provide higher potential scoring material for subsequent matches.
 
-#### Feature 6: Value Ratio of Moved Card to Remaining Cards in B (-4.4727)
+##### Feature 6: Value Ratio of Moved Card to Remaining Cards in B (-4.4727)
 A large-magnitude negative weight. This feature indicates whether the algorithm tends to play high-value cards first or low-value cards first; here the strongly negative weight means it prefers playing cards with low value relative to the remaining hand first, reserving high-value cards for later to maximize future matching potential.
 
 
 The evaluation of this genetic algorithm and its best genome under given real A and B instances is deferred to the model comparison section, where it is assessed together with the Transformer model.
 
 
-### 2.2 Implementation of the Transformer Model Algorithm
+## 2.2 Implementation of the Transformer Model Algorithm
 
 I employed a standard Transformer model. During training, the inputs are **A**, **B**, and $best\_moves$. During inference, **A** and **B** serve as input features, while $best\_move$ acts as the target label for computing the loss function, thereby guiding model optimization (i.e., the supervised learning target).
 

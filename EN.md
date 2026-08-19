@@ -210,7 +210,7 @@ This computes the time complexity required to determine the outcome—according 
 
 For each element in **B**, the algorithm attempts to insert it into every possible position in the current **A**, then recursively processes the remaining elements. Suppose **|B| = n** and **|A| = m**. In the first step, there are **n** choices for which element to insert, and for each such choice, there are **m+1** possible insertion positions. Thus, there are $n \cdot (m+1)$possible  paths at the first level.
 
-After inserting an element at an arbitrary position, let $p$ denote the probability that a match occurs.
+After inserting an element at an arbitrary position, let **p** denote the probability that a match occurs.
 
 ---
 
@@ -219,13 +219,13 @@ After inserting an element at an arbitrary position, let $p$ denote the probabil
 We now analyze the expected length of the subsequence removed when a match occurs.
 
 Consider the following simplified scenario:  
-We have a sequence **A** of $m$ distinct integers. A value $x \in A$ already exists in **A**. Now we insert another copy of $x$ into a uniformly random position among the $m+1$ possible insertion slots, forming a new sequence **A′**. This creates a contiguous subsequence $[x \ldots x]$, which is then removed. What is the expected length of this removed subsequence?
+We have a sequence **A** of **m** distinct integers. A value $x \in A$ already exists in **A**. Now we insert another copy of **x** into a uniformly random position among the $m+1$ possible insertion slots, forming a new sequence **A′**. This creates a contiguous subsequence $[x \ldots x]$, which is then removed. What is the expected length of this removed subsequence?
 
 This can be further reduced to a purely combinatorial problem:
 
 > From the integers $1, 2, \ldots, m+1$, select two distinct numbers uniformly at random. What is the expected number of integers between them, inclusive?
 
-Let the two selected positions be $i$ and $j$ with $i < j$. The distance (inclusive length) is $d = j - i + 1$, where $2 \leq d \leq m+1$.
+Let the two selected positions be **i** and **j** with $i < j$. The distance (inclusive length) is $d = j - i + 1$, where $2 \leq d \leq m+1$.
 
 The expected value is:
 
@@ -242,7 +242,7 @@ $$
 $$
 Therefore, **the expected length of the removed subsequence upon a successful match is $\frac{|A| + 5}{3}$**.
 
-Consequently, if the current length of **A** is $|A|$, then after a match, the expected new length $|A'|$ is:
+Consequently, if the current length of **A** is **|A|**, then after a match, the expected new length **|A'|** is:
 
 $$
 \mathbb{E}[|A'|] = |A| + 1 - \frac{|A| + 5}{3} = \frac{2|A| - 2}{3}
@@ -254,7 +254,7 @@ $$
 
 Now consider the matching probability dynamics.
 
-We have a sequence **A** of length $m$ with all distinct elements. We insert an element $b$ (from **B**, which may contain duplicates) into a random position in **A**. With probability $p$, a match occurs; otherwise (with probability $1-p$), nothing is removed.
+We have a sequence **A** of length **m** with all distinct elements. We insert an element **b** (from **B**, which may contain duplicates) into a random position in **A**. With probability **p**, a match occurs; otherwise (with probability $1-p$), nothing is removed.
 
 Let:
 - $E[K]$: expected number of elements in **A** that can match any element in the remaining **B**.
@@ -280,20 +280,20 @@ Assuming large values ($x = E[K] \gg 1$, $y = |B| \gg 1$), we observe:
 $$
 \frac{x}{y} > \frac{(2x - 2)/3}{y - 1} \approx \frac{2x}{3(y - 1)} \approx \frac{2}{3} \cdot \frac{x}{y}
 $$
-Hence, **the matching probability $p$ decreases after a successful match**.
+Hence, **the matching probability p decreases after a successful match**.
 
 Conversely, if no match occurs:
 - **A** grows by 1 (since the new element is added without removal),
 - The new element may itself become a future match target, so the number of matchable elements **increases or stays the same**,
 - **B** still shrinks by 1.
 
-Therefore, **$p$ increases significantly after a failed match**.
+Therefore, **p increases significantly after a failed match**.
 
 This leads to a key insight:
 
 > The system exhibits a **negative feedback loop**:  
-> - If a match occurs → $p$ decreases;  
-> - If no match occurs → $p$ increases.  
+> - If a match occurs → **p** decreases;  
+> - If no match occurs → **p** increases.  
 
 This behavior aligns with intuition and stabilizes the system.
 
@@ -301,9 +301,9 @@ This behavior aligns with intuition and stabilizes the system.
 
 ### State Evolution Model
 
-Define $M_t$ as the length of **A** at the beginning of step $t$. The system evolves as:
+Define **M_t** as the length of **A** at the beginning of step **t**. The system evolves as:
 
-- With probability $p_t$ (match succeeds):
+- With probability **p_t** (match succeeds):
   $
   M_{t+1} = \frac{2M_t - 2}{3}
   $
@@ -312,19 +312,19 @@ Define $M_t$ as the length of **A** at the beginning of step $t$. The system evo
   M_{t+1} = M_t + 1
   $
 
-Here, $p_t$ depends on the overlap between the current **A** and the remaining **B**.
+Here, **p_t** depends on the overlap between the current **A** and the remaining **B**.
 
 > Due to the negative feedback described above, the system self-regulates:  
-> - Elimination reduces $M$ → lowers future $p_t$;  
-> - No elimination increases $M$ → raises future $p_t$.  
+> - Elimination reduces **M** → lowers future **p_t**;  
+> - No elimination increases **M** → raises future **p_t**.  
 
-Thus, $M_t$ neither explodes nor collapses to zero, but fluctuates around a **dynamic equilibrium**.
+Thus, **M_t** neither explodes nor collapses to zero, but fluctuates around a **dynamic equilibrium**.
 
 ---
 
 ### Steady-State Analysis
 
-Assume the system reaches a steady state where the expected length remains constant: $\mathbb{E}[M_t] \approx M$ for all $t$. Approximate $p_t \approx p$ as a constant depending only on $M$ and the current size of **B** (denoted $y$).
+Assume the system reaches a steady state where the expected length remains constant: $\mathbb{E}[M_t] \approx M$ for all **t**. Approximate $p_t \approx p$ as a constant depending only on **M** and the current size of **B** (denoted **y**).
 
 Then:
 
@@ -332,7 +332,7 @@ $
 M = p \cdot \frac{2M - 2}{3} + (1 - p)(M + 1)
 $
 
-Solving for $M$:
+Solving for **M**:
 
 $
 M = \frac{3}{p} - 5
@@ -342,16 +342,16 @@ $
 
 ### Estimating the Equilibrium Length
 
-To estimate $p$ and locate the balance point, we adopt a **mean-field approximation**:
+To estimate **p** and locate the balance point, we adopt a **mean-field approximation**:
 
 - Although **B** is a fixed input sequence, **A** evolves dynamically.
-- Both share the same alphabet (values 1 to $K$).
-- In expectation, the number of matchable elements between **A** and the remaining **B** is proportional to $M$.
+- Both share the same alphabet (values 1 to **K**).
+- In expectation, the number of matchable elements between **A** and the remaining **B** is proportional to **M**.
 
 We make two key assumptions:
 
 1. **Mean-field approximation**: In the large-system limit, the instantaneous matching probability can be approximated by its expected value, and this probability is proportional to the current length $ M $ of sequence A.
-2. **Quasi-static approximation**: Since $y = |B|$ changes slowly (decreases by 1 per step), the system quickly equilibrates at each fixed $y$.
+2. **Quasi-static approximation**: Since $y = |B|$ changes slowly (decreases by 1 per step), the system quickly equilibrates at each fixed **y**.
 
 Thus:
 
@@ -555,7 +555,7 @@ Therefore, the actual search space for optimal play—represented as a decision 
 
 Exhaustive recursive search / brute-force recursion (Recursive_StrategyAndScore) attempts all possible options to guarantee finding the optimal solution, resulting in an enormous decision tree. Note that the $O(n^{3/2})$ figure derived above is the *average-case* search cost under the mean-field model, not a verification bound; it should not be conflated with the complexity of checking a single strategy.
 
-The decision variant is in NP — any given strategy can be simulated and its score verified in polynomial time (e.g., $O(n^2)$ in the worst case, by simulating the $n$ insertions each over a list of length at most $m+n$).
+The decision variant is in NP — any given strategy can be simulated and its score verified in polynomial time (e.g., $O(n^2)$ in the worst case, by simulating the **n** insertions each over a list of length at most $m+n$).
 
 This resembles the Travelling Salesman Problem (TSP), where the decision to visit a particular city directly affects the distances and path choices for subsequent cities. Similarly, in our problem, a single "matching" operation fundamentally alters the "map" (i.e., list A), thereby influencing the scores (i.e., optimal card-playing decisions) of all subsequent "paths." This structural similarity highlights the long-range coupling between decisions, which complicates the search for an optimal strategy.
 
@@ -1067,7 +1067,7 @@ Then we need to evaluate our genetic algorithm and obtained genome under given r
 
 ### 2.2 Implementation of the Transformer Model Algorithm
 
-I employed a standard Transformer model. During training, the inputs are $A$, $B$, and $best\_moves$. During inference, $A$ and $B$ serve as input features, while $best\_move$ acts as the target label for computing the loss function, thereby guiding model optimization (i.e., the supervised learning target).
+I employed a standard Transformer model. During training, the inputs are **A**, **B**, and $best\_moves$. During inference, **A** and **B** serve as input features, while $best\_move$ acts as the target label for computing the loss function, thereby guiding model optimization (i.e., the supervised learning target).
 
 Initially, I attempted a more streamlined implementation of this Transformer training, but encountered issues such as slow convergence, gradient explosion, and the inability to flexibly terminate training manually. Consequently, in addition to early stopping and gradient clipping, I incorporated learning rate warm-up, cosine annealing, and graceful shutdown with signal handling to accelerate training without compromising performance.
 
@@ -1083,12 +1083,12 @@ Initially, I attempted a more streamlined implementation of this Transformer tra
 prepare_data_transformer(sample, num_a=6, num_b=3)
 ```
 - **Purpose**: Handles data preprocessing and feature engineering.
-- **Feature Engineering**: For each element in sequences $A$ and $B$, six features are created (identical to those used in the genetic algorithm).
-- After feature augmentation, the original $A$, $B$ sequences, and corresponding $best\_moves$ are packed together into the format required for model training and returned.
+- **Feature Engineering**: For each element in sequences **A** and **B**, six features are created (identical to those used in the genetic algorithm).
+- After feature augmentation, the original **A**, **B** sequences, and corresponding $best\_moves$ are packed together into the format required for model training and returned.
 - **Parameters**:
-  - `sample` (dict): A single data sample containing sequences $A$, $B$, and $best\_moves$.
-  - `num_a` (int): Length of sequence $A$.
-  - `num_b` (int): Length of sequence $B$.
+  - `sample` (dict): A single data sample containing sequences **A**, **B**, and $best\_moves$.
+  - `num_a` (int): Length of sequence **A**.
+  - `num_b` (int): Length of sequence **B**.
 - **Returns**: `input_sequence` (shape $(9, 6)$) along with corresponding `order_target` and `pos_target` labels.
 
 ---
@@ -1097,18 +1097,18 @@ prepare_data_transformer(sample, num_a=6, num_b=3)
 class TransformerMovePredictor(nn.Module)
 ```
 - A trained model is an instance of the `TransformerMovePredictor` class. Training updates the weights and biases of all neural network layers. The model uses two prediction heads to output:
-  1. The predicted insertion order of elements in $B$,
-  2. The predicted insertion positions in $A$ for each element of $B$.
+  1. The predicted insertion order of elements in **B**,
+  2. The predicted insertion positions in **A** for each element of **B**.
 
 - **Input (`src`)**:
   - A tensor of shape $(batch\_size, 9, input\_dim)$.
-  - Sequence length is fixed at 9: the first 6 elements represent contextual information from $A$, and the last 3 represent target elements from $B$.
+  - Sequence length is fixed at 9: the first 6 elements represent contextual information from **A**, and the last 3 represent target elements from **B**.
   - $input\_dim$ denotes the feature dimensionality of each element.
 
 - **Output**:
   - A tuple `(order_logits, pos_preds)`:
-    - `order_logits`: Tensor of shape $(batch\_size, 3, 3)$, used to predict the relative order among elements in $B$.
-    - `pos_preds`: Tensor of shape $(batch\_size, 3)$, used to predict the insertion position in $A$ for each element of $B$.
+    - `order_logits`: Tensor of shape $(batch\_size, 3, 3)$, used to predict the relative order among elements in **B**.
+    - `pos_preds`: Tensor of shape $(batch\_size, 3)$, used to predict the insertion position in **A** for each element of **B**.
 
 ---
 
@@ -1116,15 +1116,15 @@ class TransformerMovePredictor(nn.Module)
 Transformer_predict(A, B, model, num_a=6, num_b=3)
 ```
 - Performs prediction using a trained Transformer model (specifically for $|A|=6$, $|B|=3$).
-- Employs a heuristic check: if $A$ and $B$ are disjoint and $B$ contains no duplicate elements, scoring is impossible. In such cases, prediction is skipped and a default move strategy is returned directly. (Note: during training, samples where $A$ and $B$ are disjoint were already excluded.)
-- Intuition: If $A \cap B = \emptyset$ and $B$ has no duplicates, no matches can be formed. However, if $B$ contains duplicates (e.g., $b_1 = b_2$), each copy can be inserted into different positions in $A$, potentially achieving a maximum score of $\text{sum}(A) + \text{sum}(B)$.
+- Employs a heuristic check: if **A** and **B** are disjoint and **B** contains no duplicate elements, scoring is impossible. In such cases, prediction is skipped and a default move strategy is returned directly. (Note: during training, samples where **A** and **B** are disjoint were already excluded.)
+- Intuition: If $A \cap B = \emptyset$ and **B** has no duplicates, no matches can be formed. However, if **B** contains duplicates (e.g., $b_1 = b_2$), each copy can be inserted into different positions in **A**, potentially achieving a maximum score of $\text{sum}(A) + \text{sum}(B)$.
 
 - **Parameters**:
-  - `A` (numpy.ndarray): Array representing sequence $A$.
-  - `B` (numpy.ndarray): Array representing sequence $B$.
+  - `A` (numpy.ndarray): Array representing sequence **A**.
+  - `B` (numpy.ndarray): Array representing sequence **B**.
   - `model` (nn.Module): Trained Transformer model.
-  - `num_a` (int): Length of sequence $A$.
-  - `num_b` (int): Length of sequence $B$.
+  - `num_a` (int): Length of sequence **A**.
+  - `num_b` (int): Length of sequence **B**.
 
 - **Returns**: (List of best move strategies, predicted score)
 
@@ -1161,22 +1161,22 @@ Thus, $\omega_i = 10000^{-2i / d_{\text{model}}}$, and $\theta_{\text{pos}, i} =
 The angular term forms a 2D matrix, and this design inherently exhibits **multi-scale frequency characteristics**:
 
 - **Along the position dimension (rows)**:  
-  For a fixed frequency index $i$, $\theta_{\text{pos}, i}$ grows linearly with the position index $\text{pos}$.  
-  - When $i$ is small (corresponding to lower dimensions of the encoding vector), the decay factor $10000^{-2i / d_{\text{model}}} \approx 1$, resulting in a large slope. Consequently, $\sin(\theta)$ and $\cos(\theta)$ oscillate rapidly, enabling fine-grained discrimination between adjacent positions.  
-  - When $i$ is large (corresponding to higher dimensions), the decay factor becomes significantly smaller than 1, causing $\theta$ to increase slowly. The sine and cosine functions thus vary smoothly, encoding coarse-grained, long-range global positional information.
+  For a fixed frequency index **i**, $\theta_{\text{pos}, i}$ grows linearly with the position index $\text{pos}$.  
+  - When **i** is small (corresponding to lower dimensions of the encoding vector), the decay factor $10000^{-2i / d_{\text{model}}} \approx 1$, resulting in a large slope. Consequently, $\sin(\theta)$ and $\cos(\theta)$ oscillate rapidly, enabling fine-grained discrimination between adjacent positions.  
+  - When **i** is large (corresponding to higher dimensions), the decay factor becomes significantly smaller than 1, causing $\theta$ to increase slowly. The sine and cosine functions thus vary smoothly, encoding coarse-grained, long-range global positional information.
 
 - **Along the embedding dimension (columns)**:  
-  For a fixed position $\text{pos}$, $\theta_{\text{pos}, i}$ **decays exponentially** as the dimension index $i$ increases, because
+  For a fixed position $\text{pos}$, $\theta_{\text{pos}, i}$ **decays exponentially** as the dimension index **i** increases, because
   $$
   10000^{-2i / d_{\text{model}}} = \exp\left(-\frac{2i}{d_{\text{model}}} \ln 10000\right)
   $$
-  is an exponential decay function with respect to $i$.
+  is an exponential decay function with respect to **i**.
 
 This design enables the model to simultaneously capture both local details and global structural information, enhancing its capacity to represent features at multiple scales and thereby improving its ability to model complex patterns.
 
 2. **Linear Representability of Relative Positions**
 
-For any fixed offset $k$, the positional encoding at position $\text{pos} + k$, denoted $PE(\text{pos} + k)$, can be expressed as a **linear transformation** of $PE(\text{pos})$—specifically, a rotation matrix.
+For any fixed offset **k**, the positional encoding at position $\text{pos} + k$, denoted $PE(\text{pos} + k)$, can be expressed as a **linear transformation** of $PE(\text{pos})$—specifically, a rotation matrix.
 
 The sine-cosine positional encoding assigns to each pair of dimensions $(2i, 2i+1)$ the vector:
 
@@ -1188,7 +1188,7 @@ $$
 \end{bmatrix}.
 $$
 
-For a relative offset $k$, we have:
+For a relative offset **k**, we have:
 
 $$
 \begin{bmatrix}
@@ -1222,7 +1222,7 @@ This means the encoding at position $\text{pos} + k$ can be obtained by left-mul
 
 Because the self-attention mechanism fundamentally computes dot products, and dot products are well-behaved under linear transformations, this property allows the model to **easily learn relative positional relationships**.
 
-Therefore, the alternating use of sine and cosine functions enables the self-attention mechanism to effortlessly capture and reason about relative positional information—such as “shift $k$ positions forward” or “shift $k$ positions backward.”
+Therefore, the alternating use of sine and cosine functions enables the self-attention mechanism to effortlessly capture and reason about relative positional information—such as “shift **k** positions forward” or “shift **k** positions backward.”
 
 ### Feature Engineering 
 
@@ -1240,13 +1240,13 @@ For each element a (number) in A:
 ]
 ```
 
-**Standardized Value**: Reflects the difference between the value of $a$ and the mean of $A$
+**Standardized Value**: Reflects the difference between the value of **a** and the mean of **A**
 
-**Normalized Value**: Between 0-1, directly reflects the numerical value of $a$
+**Normalized Value**: Between 0-1, directly reflects the numerical value of **a**
 
 Features for Sequence B (Insertion Sequence)
 
-For each element $b$ in B:
+For each element **b** in B:
 ```
 [
   Ratio of b to the sum of all elements in B,

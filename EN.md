@@ -836,7 +836,7 @@ early_stop_threshold = 0.01
 
 ## Genome Analysis
 
-Next, let's analyze the obtained best genome. The following is based on one of my test datasets.
+Next, let's analyze the obtained best genome. The following is based on the freshly generated training dataset (`data_GA_fill.json`, 10,000 samples).
 
 This is a genome obtained after training with the larger configuration (population 1000, up to 50 generations, 1000 evaluation rounds per individual). The model terminated at generation 19 due to early stopping:
 
@@ -858,7 +858,7 @@ This indicates that both standard genetic algorithm and island model evolution a
 
 I conducted multiple tests, and it's not certain which method has higher improvement rate, indicating that for different genomes and different test sets, different models are suitable. Moreover, the island model does not show clear superiority in this problem.
 
-The final improvement rates are all relatively low, indicating that the first generation genome already performed well (this is also related to using warm start).
+The best fitness improved from 45.69 at the first generation to 46.99 at generation 16 (where it peaked), then fluctuated within a narrow band until early stopping at generation 19. The modest total gain (~2.8%) reflects the effective warm start initialization, which seeds 70% of the population with score- and future-score-biased weights, as well as the inherent noise of evaluating each genome on random games.
 
 ### Feature Weight Analysis
 
@@ -895,7 +895,7 @@ A moderately positive weight, suggesting that the algorithm slightly prefers kee
 A large-magnitude negative weight. This feature indicates whether the algorithm tends to play high-value cards first or low-value cards first; here the strongly negative weight means it prefers playing cards with low value relative to the remaining hand first, reserving high-value cards for later to maximize future matching potential.
 
 
-Then we need to evaluate our genetic algorithm and obtained genome under given real A and B. However, this part will be placed later and evaluated together with the transformer model.
+The evaluation of this genetic algorithm and its best genome under given real A and B instances is deferred to the model comparison section, where it is assessed together with the Transformer model.
 
 
 ### 2.2 Implementation of the Transformer Model Algorithm

@@ -550,97 +550,27 @@ This means the **number of decision paths is roughly 16 times larger** than the 
 
 > **Crucially**, this estimate does **not** count final card combinations—it counts **decision sequences** (i.e., dynamic strategies). Because the simulation accounts for matching rules and the order-dependent nature of insertions (e.g., inserting B[0] then B[1] can yield a different outcome than the reverse), it captures the true **dynamic combinatorial complexity** of the game.
 
-Therefore, the actual search space for optimal play—represented as a decision tree—is significantly larger than the static upper bound previously calculated. This highlights the immense scale of the problem and underscores the challenge in exhaustively searching for optimal strategies.
-
-
-Exhaustive recursive search / brute-force recursion (Recursive_StrategyAndScore) attempts all possible options to guarantee finding the optimal solution, resulting in an enormous decision tree. Note that the $O(n^{3/2})$ figure derived above is the *average-case* search cost under the mean-field model, not a verification bound; it should not be conflated with the complexity of checking a single strategy.
-
-The decision variant is in NP — any given strategy can be simulated and its score verified in polynomial time (e.g., $O(n^2)$ in the worst case, by simulating the **n** insertions each over a list of length at most $m+n$).
-
-This resembles the Travelling Salesman Problem (TSP), where the decision to visit a particular city directly affects the distances and path choices for subsequent cities. Similarly, in our problem, a single "matching" operation fundamentally alters the "map" (i.e., list A), thereby influencing the scores (i.e., optimal card-playing decisions) of all subsequent "paths." This structural similarity highlights the long-range coupling between decisions, which complicates the search for an optimal strategy.
+Consequently, the exhaustive recursive search (`Recursive_StrategyAndScore`) must explore a decision tree whose size grows as $O(n^{3/2})$ under the mean-field model—this figure describes the *scale of the search tree*, not a per-strategy verification bound. Moreover, a single "matching" operation fundamentally alters **A**, coupling every decision to all subsequent ones (a long-range dependency reminiscent of TSP); this structural coupling, combined with the sheer tree size, makes exhaustive search infeasible at larger scales.
 
 ### NP-completeness Proof for the Exact-Score Decision Variant
 
-**Proof: The Exact-Score Decision Variant (`CARD_GAME_DEC_EQ`) is NP-complete**
+We prove that the exact-score decision variant `CARD_GAME_DEC_EQ` — "does a strategy exist whose total score exactly equals K?" — is NP-complete, via a Karp reduction from **Subset Sum** (a classic NP-complete problem [1], restricted to distinct positive integers).
 
-In conducting this proof, we follow the standard conventions of theoretical computer science. The input size of a problem instance is defined as the total number of bits required for its **standard binary representation**. Therefore, the input size of a numerical value N is O(log N). The time complexity of algorithms will be measured based on this input size.
+#### Reduction
 
-### 1. Discussion on the Variant: "Is There a Strategy to Achieve Exactly K Points?"
+Given a Subset Sum instance $(S, T)$, choose an integer $X > \text{sum}(S)$ (representable in $O(\log(\text{sum}(S)))$ bits) and construct:
 
-We leverage the **Subset Sum problem**, a classic NP-complete problem, and employ a standard reduction structure using Karp reduction to prove the NP-completeness of this variant.
+$$A = [X], \qquad B = [X] + S, \qquad K = 2X + T$$
 
-### **Step 1: Define Related Problems**
+This construction is clearly polynomial-time.
 
-1. **Card Game Optimization Problem (`CARD_GAME_OPT`)**
-   * **Instance:** Two initial card lists `A` and `B`, where card values are positive integers.
-   * **Problem:** Find a card-playing strategy that maximizes the final total score.
+#### Correctness
 
-2. **Card Game Decision Problem with Exact Match (`CARD_GAME_DEC_EQ`)**
-   To perform the reduction, we define the "exact equality" decision version:
-   * **Instance:** Two initial card lists `A` and `B`, and a target integer `K`.
-   * **Problem:** Does there exist a card-playing strategy such that the final total score **exactly equals** `K`?
+**(⇒)** If some subset $S' \subseteq S$ sums to $T$, play the cards of $S'$ between the two $X$'s, yielding a match `[X, S', X]` with score $2X + \text{sum}(S') = 2X + T = K$. The remaining cards $S \setminus S'$ are distinct and cannot score, so the total is exactly $K$.
 
-3. **Subset Sum Problem**
-   This is a classic NP-complete problem [1]. We specifically refer to its form dealing with distinct integer sets to ensure the validity of the reduction.
-   * **Instance:** A set of `n` distinct positive integers $S = \{s_1, s_2, ..., s_n\}$, and a target integer `T`.
-   * **Problem:** Does there exist a subset `S'` ⊆ `S` such that the sum of all elements in `S'` exactly equals `T`?
+**(⇐)** In this gadget the **only** matchable pair is the two $X$'s. To score $K = 2X + T$, they must match with a subset $S_{\text{mid}} \subseteq S$ sandwiched between them; the score is $2X + \text{sum}(S_{\text{mid}})$, so $\text{sum}(S_{\text{mid}}) = T$ gives the required subset.
 
-### **Step 2: Construct the Reduction**
-
-Our goal is to construct an algorithm that can, in polynomial time, transform any instance `(S, T)` of the Subset Sum problem into an equivalent instance `(A, B, K)` of the Card Game Decision Problem.
-
-Given a Subset Sum instance `(S, T)`, we construct an instance of `CARD_GAME_DEC_EQ` as follows:
-
-1. **Choose a sufficiently large base number `X`:**,since all numbers are given in binary, `X` can be represented 
-in O(log(sum(S))) bits, which is polynomial in the input size.
-
-   Let $Sum(S)$ be the sum of all elements in set `S`. We choose an integer `X` such that $X > Sum(S)$. Since `T` must not exceed $Sum(S)$ for the Subset Sum problem to be meaningful, `X` is necessarily greater than both `T` and any element in `S`. This `X` can be computed and represented in polynomial time (e.g., take $Sum(S) + 1$).
-
-2. **Construct initial lists `A` and `B`:**
-   * `A = [ X ]`
-   * `B = [ X ] + S` (where `+` denotes list concatenation)
-
-3. **Set the target score `K`:**
-   * `K = 2X + T`
-
-This transformation process (computing `X`, creating `A` and `B`) involves only basic arithmetic and list operations, with time and space complexity polynomial in the size of input `S`. Therefore, this is a polynomial-time reduction.
-
-### **Step 3: Prove the Correctness of the Reduction**
-
-Now we must prove: **The Subset Sum problem has a solution if and only if the constructed Card Game Decision Problem has a solution.**
-
-#### **(⇒) Sufficiency Proof**
-*If the Subset Sum problem has a solution, then there exists a strategy in the card game that scores exactly `K`.*
-
-If the Subset Sum problem has a solution, then there exists a subset $S' \subseteq S$ with element sum $Sum(S') = T$. We can construct the following strategy:
-
-1. Through a series of operations, the player arranges all cards in `S'` between the two `X` cards, forming a scoring structure `[X, S', X]`.
-2. According to the game's matching rules (as described in the main text), this structure produces a score of $2X + Sum(S')$.
-3. Since $Sum(S') = T$, the score from this step is $2X + T = K$.
-4. After this scoring, both `X` cards and all cards in `S'` are removed. The remaining cards on the field are from set $S \setminus S'$. Because the elements in the original set `S` are distinct, these remaining cards have distinct values and cannot form any matching scores.
-5. Therefore, the final total score is **exactly** `K`.
-
-#### **(⇐) Necessity Proof**
-*If there exists a strategy in the card game that scores exactly `K`, then the Subset Sum problem has a solution.*
-
-If there exists a strategy that achieves a final score of exactly $K = 2X + T$, let's analyze the source of the score. In this constructed instance, the only cards that can form a match are the two `X` cards.
-
-1. **Case 1: The two `X` cards match directly adjacent.**
-   If the strategy makes the two `X` cards directly adjacent forming an `[X, X]` structure, then the score will be `2X`. Afterward, only the distinct cards from set `S` remain on the field, which cannot score further. The final total score is `2X`. But this does not equal $K = 2X + T$ (since `T` is a positive integer). Therefore, this strategy cannot achieve the target score `K`.
-
-2. **Case 2: The two `X` cards match non-adjacently.**
-   For the two `X` cards to match, there must be some cards from `S` between them. Let the subset of cards sandwiched in between be $S_{mid} \subseteq S$. The scoring structure formed is `[X, S_mid, X]`.
-   * The score from this structure is $2X + Sum(S_{mid})$.
-   * After scoring, the remaining cards on the field cannot match again. Therefore, this is the final total score.
-   * For the total score to exactly equal `K`, we must have: $2X + Sum(S_{mid}) = K = 2X + T$.
-   * This directly yields $Sum(S_{mid}) = T$.
-
-   This means we have found a subset of `S` ($S_{mid}$) whose element sum equals `T`. Therefore, the Subset Sum problem has a solution.
-
-We have proven the equivalence in both directions. Since `Subset Sum` is NP-complete, and we have constructed a polynomial-time reduction to `CARD_GAME_DEC_EQ`, we conclude:
-
-***Conclusion i: The exact-score decision variant of the card game problem (`CARD_GAME_DEC_EQ`) is NP-complete.***
->Although this paper focuses on the optimization problem CARD_GAME_OPT, it is worth mentioning that since the exact-score decision variant is NP-hard, and because any given card-playing strategy can be simulated and its score verified in polynomial time (worst-case $O(n^2)$), it belongs to NP. Therefore, `CARD_GAME_DEC_EQ` is NP-complete.
+Since the reduction is sound in both directions and polynomial-time, and membership in NP holds (any strategy is simulated and verified in polynomial time), **`CARD_GAME_DEC_EQ` is NP-complete**. Note that this concerns the exact-equality variant only; the complexity class of the optimization problem and of the "score ≥ K" decision problem remains an open question.
 
 ### Relationship Between Optimization Problem, Decision Problem, and Their Variants
 

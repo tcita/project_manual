@@ -304,13 +304,13 @@ This behavior aligns with intuition and stabilizes the system.
 Define **M_t** as the length of **A** at the beginning of step **t**. The system evolves as:
 
 - With probability **p_t** (match succeeds):
-  $
+$$
   M_{t+1} = \frac{2M_t - 2}{3}
-  $
+$$
 - With probability $1 - p_t$ (no match):
-  $
+$$
   M_{t+1} = M_t + 1
-  $
+$$
 
 Here, **p_t** depends on the overlap between the current **A** and the remaining **B**.
 
@@ -328,15 +328,15 @@ Assume the system reaches a steady state where the expected length remains const
 
 Then:
 
-$
+$$
 M = p \cdot \frac{2M - 2}{3} + (1 - p)(M + 1)
-$
+$$
 
 Solving for **M**:
 
-$
+$$
 M = \frac{3}{p} - 5
-$
+$$
 
 ---
 
@@ -355,35 +355,35 @@ We make two key assumptions:
 
 Thus:
 
-$
+$$
 p_t \approx c \cdot \frac{M_t}{y} \quad \text{(for some constant } c\text{)}
-$
+$$
 
 In equilibrium, $M \approx 3/p - 5 \approx 3/p$ (ignoring the constant for scaling analysis). Substituting $p \approx M / y$:
 
-$
+$$
 M \approx \frac{3}{p} \approx \frac{3y}{M} \quad \Rightarrow \quad M^2 \approx 3y
-$
+$$
 
 Therefore, for most of the process (when $y = \Theta(n)$):
 
-$
+$$
 M_t = \Theta(\sqrt{n})
-$
+$$
 
 This implies that the typical length of the dynamic sequence **A** scales with the square root of the initial size of **B**.
 
 
 
 Since $ M_t = \Theta(\sqrt{n}) $ holds in typical cases, the total time complexity is:
-$
+$$
 T = \sum_{t=1}^{n} O(M_t) \approx \sum_{t=1}^{n} O(\sqrt{n}) = O(n \cdot \sqrt{n}) = O(n^{3/2}).
-$
+$$
 
 More precisely, if we treat $ M_t \approx \sqrt{n - t} $ as a continuous function, then:
-$
+$$
 T \approx \int_0^n \sqrt{t} \, dt = \frac{2}{3} n^{3/2} = \Theta(n^{3/2}).
-$
+$$
 
 This model is primarily intended for analyzing the macroscopic statistical behavior of the system when $ M \gg 1 $. We assume that the probability of the system being completely emptied [i.e., $ M = 0 $ or $ M = 1 $] during execution is negligible. The validity of this assumption stems from the fact that the equilibrium point established by the negative feedback mechanism, $ M_{\text{eq}} \approx \sqrt{3y/c} $, decreases slowly as $ y $ diminishes, yet remains far from zero as long as $ y $ is still relatively large. Consequently, the system spends the vast majority of its time in states where $ M $ is sufficiently large. 
 
@@ -443,9 +443,9 @@ We compute the total number of possible final static configurations when inserti
 Consider the scenario where we insert all elements of B (an array of length 3) into A (an array of length 6), ignoring the actual numeric values (i.e., treating cards only as belonging to group A or group B). This becomes a multiset permutation problem: how many distinct length-9 arrays can be formed by arranging the multiset {A, A, A, A, A, A, B, B, B}?
 
 The answer is:
-$
+$$
 \binom{9}{6} \cdot \binom{3}{3} = \binom{9}{6} = \binom{9}{3}
-$
+$$
 
 Now, we assign actual numeric values (from 1 to 13) to these placeholders:
 
@@ -453,9 +453,9 @@ Now, we assign actual numeric values (from 1 to 13) to these placeholders:
 - Each of the 3 B-cards can take **any** value from 1 to 13, with repetitions allowed, giving $ 13^3 $ possible assignments.
 
 Therefore, the total number of possible final configurations (under the no-matching assumption) is:
-$
+$$
 \binom{9}{3} \cdot \frac{13!}{(13-6)!} \cdot 13^3 = 228{,}012{,}744{,}960
-$
+$$
 
 Assuming each sample requires approximately 10 bytes of storage, the total data size would exceed **2,000 GB**—an enormous amount.
 

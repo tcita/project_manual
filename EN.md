@@ -1,4 +1,4 @@
-# An Exploration Sparked by a Card Game: From an NP-Completeness Conjecture to an AI Surrogate Model (A Personal Exploration )
+# An Exploration Sparked by a Card Game: From Problem Modeling to an AI Surrogate Model (A Personal Exploration)
 
 
 
@@ -7,12 +7,7 @@
 
 From an engineering perspective, I designed and implemented a turn-based *P v E* card game using the Unity engine. The game features simple rules yet requires both luck and strategic decision-making. The computer opponent’s strategy is powered by a locally deployed server running a trained ensemble AI model.
 
-Theoretically, I abstracted the game mechanics into a subsequence selection and score maximization problem governed by specific rules. Through in-depth analysis, I discovered that the actual decision space grows combinatorically with the number of moves, leading to an explosive increase in complexity. To understand its computational complexity, I examined a generalized version of this card game. Suspecting the abstracted problem might be NP-Hard, I formally reduced it to the Subset Sum problem, thereby proving that the problem is not only NP-Hard but also NP-Complete. Consequently, exact solutions become computationally infeasible even for moderately sized instances.
-
-> [!NOTE]
-> **Editorial Note regarding NP-hardness Scope:**
->
-> For a detailed discussion, please refer to [Section 3.2.4 (Relationship Between Optimization Problem, Decision Problem, and Their Variants)](file:///c:/Users/09333/Documents/GitHub/project_manual/EN.md#L692). It is important to clarify that this document rigorously establishes the NP-completeness of the **exact-score decision variant** `CARD_GAME_DEC_EQ` (reachability problem). Because the maximum score under the current gadget is trivially computable, the NP-hardness of the optimization problem and the "$\ge K$" decision problem remains an open question (Open Problem). This does not impact the motivation for the AI surrogate model, which is justified by the combinatorial state space scale.
+Theoretically, I abstracted the game mechanics into a subsequence selection and score maximization problem governed by specific rules. Through in-depth analysis, I discovered that the actual decision space grows combinatorically with the number of moves, leading to an explosive increase in complexity. This combinatorial explosion—quantified through a Monte Carlo estimate of decision-path counts and a static combinatorial upper bound—is the central finding of this work: it means exact solutions become computationally infeasible even for moderately sized instances. As a byproduct of this complexity analysis, I also proved that the exact-score decision variant of the problem (whether a strategy can achieve a total score exactly equal to a given value K) is NP-complete, by reducing the Subset Sum problem to it; the complexity class of the optimization problem itself remains an open question.
 
 To address this challenge, I explored a general-purpose solution approach based on a lightweight surrogate model that integrates a Transformer architecture with a genetic algorithm. The core idea is to leverage an exact exhaustive-search algorithm to generate high-quality training samples within a computationally tractable problem scale, then train a computationally inexpensive AI model to mimic the optimal decision-making behavior observed in those samples.
 
@@ -24,7 +19,7 @@ This document is not a formal academic paper, nor does it claim to present rigor
 
 - **Rigorous Algorithmic Analysis**
 
-- **Proof of NP-Completeness for a Custom-Designed Problem, with Supporting Discussion**  
+- **Proof of NP-Completeness for the Exact-Score Decision Variant of a Custom-Designed Problem, with Discussion of Its Scope**
 
 - **Comprehensive AI Model Evaluation Framework**
 
@@ -38,7 +33,7 @@ This document is not a formal academic paper, nor does it claim to present rigor
 
 - **Discussion of a Tree-Based Representation Well-Suited for Expressing Combinatorial Problems (Appendix)**
 
->  Note: The specific implementation of the code is available in the [source code of this project]((https://github.com/tcita/python_server.git)). The dataset itself is not uploaded, but the code used to generate the dataset is included.  
+>  Note: The specific implementation of the code is available in the [source code of this project](https://github.com/tcita/card-game-ai.git). The dataset itself is not uploaded, but the code used to generate the dataset is included.  
 
 ## Document Structure
 
@@ -48,7 +43,7 @@ This document is divided into four main sections:
 This section provides a detailed description of the game rules and their programmatic implementation, including:  
 - **Game Rules**  
 - **Algorithmic Analysis**  
-- **Proof of NP-Completeness**  
+- **Proof of NP-Completeness for the Exact-Score Decision Variant**  
 - **Discussion on Algorithmic Optimizations and the Proposal of an AI Surrogate Model**
 
 ### 2. AI Technical Details  
@@ -405,7 +400,7 @@ Our analysis characterizes the system's behavior in this steady-state regime and
 
 First, we develop the `simulate_insertion_tool()` function capable of handling the insertion process and scoring. Since array A dynamically changes due to insertions and subsequent matches, when this function is called, the input length of A is no longer the initial length of 6, but rather ranges from 0 to 8 (as A can only be in the range 0–8 when `insertion` might be called—A cannot be negative, and when A reaches length 9, B becomes empty and no further elements can be inserted from B). After insertion and any resulting matches, A's length will be in the range 0–9.
 
-We define the function `simulate_insertion_tool(A, b, pos)` (The implementation in [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py#L41)), which inserts element `b` into list `A` at the specified position `pos` and handles any matching that may occur.
+We define the function `simulate_insertion_tool(A, b, pos)` (The implementation in [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L41)), which inserts element `b` into list `A` at the specified position `pos` and handles any matching that may occur.
 
 The function returns: `[score, length_removed_due_to_matching, new_length_of_A, match_occurred (0 or 1), new_A]`.
 
@@ -435,7 +430,7 @@ Each step operates on the current version of A, and every insertion of B[i] caus
 
 Thus, we can design a recursive algorithm:
 
-`Recursive_StrategyAndScore(A, B, original_indices=None, move_sequence=None, used_indices=None)` (implementation available at [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/brute_force.py#L16))
+`Recursive_StrategyAndScore(A, B, original_indices=None, move_sequence=None, used_indices=None)` (implementation available at [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/brute_force.py#L16))
 
 which returns: **the theoretical maximum score** and **the corresponding sequence of moves that achieves this maximum score**.
 
@@ -560,19 +555,19 @@ Therefore, the actual search space for optimal play—represented as a decision 
 
 Exhaustive recursive search / brute-force recursion (Recursive_StrategyAndScore) attempts all possible options to guarantee finding the optimal solution, resulting in an enormous decision tree. Note that the $O(n^{3/2})$ figure derived above is the *average-case* search cost under the mean-field model, not a verification bound; it should not be conflated with the complexity of checking a single strategy.
 
-The problem is in NP — any given strategy can be simulated and its score verified in polynomial time (e.g., $O(n^2)$ in the worst case, by simulating the $n$ insertions each over a list of length at most $m+n$) — and is likely NP-hard.
+The decision variant is in NP — any given strategy can be simulated and its score verified in polynomial time (e.g., $O(n^2)$ in the worst case, by simulating the $n$ insertions each over a list of length at most $m+n$).
 
-This resembles the Travelling Salesman Problem (TSP), where the decision to visit a particular city directly affects the distances and path choices for subsequent cities. Similarly, in our problem, a single "matching" operation fundamentally alters the "map" (i.e., list A), thereby influencing the scores (i.e., optimal card-playing decisions) of all subsequent "paths." This structural similarity strongly suggests that our problem is NP-hard.
+This resembles the Travelling Salesman Problem (TSP), where the decision to visit a particular city directly affects the distances and path choices for subsequent cities. Similarly, in our problem, a single "matching" operation fundamentally alters the "map" (i.e., list A), thereby influencing the scores (i.e., optimal card-playing decisions) of all subsequent "paths." This structural similarity highlights the long-range coupling between decisions, which complicates the search for an optimal strategy.
 
-### NP-hardness Proof
+### NP-completeness Proof for the Exact-Score Decision Variant
 
-**Proof: The Card Game Optimization Problem (CARD_GAME_OPT) is NP-hard**
+**Proof: The Exact-Score Decision Variant (`CARD_GAME_DEC_EQ`) is NP-complete**
 
 In conducting this proof, we follow the standard conventions of theoretical computer science. The input size of a problem instance is defined as the total number of bits required for its **standard binary representation**. Therefore, the input size of a numerical value N is O(log N). The time complexity of algorithms will be measured based on this input size.
 
 ### 1. Discussion on the Variant: "Is There a Strategy to Achieve Exactly K Points?"
 
-We leverage the **Subset Sum problem**, a known NP-hard problem, and employ a standard reduction structure using Karp reduction to prove the NP-hardness of this variant.
+We leverage the **Subset Sum problem**, a classic NP-complete problem, and employ a standard reduction structure using Karp reduction to prove the NP-completeness of this variant.
 
 ### **Step 1: Define Related Problems**
 
@@ -644,14 +639,14 @@ If there exists a strategy that achieves a final score of exactly $K = 2X + T$, 
 
 We have proven the equivalence in both directions. Since `Subset Sum` is NP-complete, and we have constructed a polynomial-time reduction to `CARD_GAME_DEC_EQ`, we conclude:
 
-***Conclusion i: The decision variant of the card game problem (`CARD_GAME_DEC_EQ`) is NP-hard.***
->Although this paper focuses on the optimization problem CARD_GAME_OPT, it is worth mentioning that since its variant decision problem is NP-hard, and because any given card-playing strategy can be simulated and its score verified in polynomial time (worst-case $O(n^2)$), it belongs to NP. Therefore, `CARD_GAME_DEC_EQ` is NP-complete.
+***Conclusion i: The exact-score decision variant of the card game problem (`CARD_GAME_DEC_EQ`) is NP-complete.***
+>Although this paper focuses on the optimization problem CARD_GAME_OPT, it is worth mentioning that since the exact-score decision variant is NP-hard, and because any given card-playing strategy can be simulated and its score verified in polynomial time (worst-case $O(n^2)$), it belongs to NP. Therefore, `CARD_GAME_DEC_EQ` is NP-complete.
 
 ### Relationship Between Optimization Problem, Decision Problem, and Their Variants
 
 Now we explore the intrinsic connections between three problems:
 
-- **Variant Decision Problem**: As proven above, "Does there exist a strategy such that the total score exactly equals a given value K?" (proven to be NP-hard)
+- **Variant Decision Problem**: As proven above, "Does there exist a strategy such that the total score exactly equals a given value K?" (proven to be NP-complete)
 
 - **Decision Problem**: Directly corresponding to the optimization problem, "Does there exist a strategy such that the total score is at least a given value K?" (∃ strategy_score ≥ K)
 
@@ -659,22 +654,9 @@ Now we explore the intrinsic connections between three problems:
 
 These three have tight computational complexity connections:
 
-1. We proved that the "score = K" variant decision problem is NP-hard. This reveals the inherent computational difficulty of the game rules—even precisely achieving a specific score is theoretically challenging.
+1. We proved that the "score = K" variant decision problem (`CARD_GAME_DEC_EQ`) is NP-complete. This reveals the inherent computational difficulty of the game rules—even precisely achieving a specific score is theoretically challenging.
 
-2. The "score = K" problem is a special case of the "score ≥ K" problem. Any algorithm that can solve the more general "score ≥ K" problem must correctly handle all its special cases. Therefore, the worst-case time complexity of solving the "score ≥ K" problem must be no less than the complexity of solving the "score = K" problem. Thus, the "score ≥ K" decision problem directly corresponding to the optimization problem is also NP-Hard.
-
-> [!CAUTION]
-> **Editorial Note — Logical Gap in This Step**
->
-> The argument above is **not a valid reduction**. The claim that "score = K is a special case of score ≥ K" conflates informal algorithmic intuition with formal reducibility. In complexity theory, $L_{=K}$ and $L_{\geq K}$ are two **distinct decision languages** that can produce **different answers on the same input** $(A, B, K)$. For example, if the set of achievable scores is $\{0, 5, 10\}$ and $K = 3$, then $L_{\geq K}$ answers YES (since $10 \geq 3$) while $L_{=K}$ answers NO (since no strategy scores exactly 3). Therefore $L_{=K}$ is **not** a special case of $L_{\geq K}$, and solving $L_{\geq K}$ does not require the ability to solve $L_{=K}$.
->
-> **The author's own gadget provides a direct counterexample.** In the construction $A = [X],\ B = [X] + S,\ K = 2X + T$, the maximum achievable score is $2X + \text{sum}(S)$, so the $L_{\geq K}$ query reduces to $\text{sum}(S) \geq T$, which is trivially true for all valid Subset Sum instances. The $\geq K$ oracle always answers YES on the image of this reduction—it carries zero information and cannot distinguish YES/NO instances of Subset Sum.
->
-> Furthermore, one might hope to salvage this step via a Turing (Cook) reduction: determine $\text{score} = K$ by querying $\geq K$ and $\geq K{+}1$. However, ($\geq K$) $\wedge$ $\neg$($\geq K{+}1$) establishes that $\max = K$, **not** that score $K$ is achievable in general—the achievable score set can have gaps below the maximum. The $L_{\geq K}$ oracle is functionally equivalent to a $\max$-oracle (via binary search), and knowing the maximum does not reveal whether intermediate values are attainable. Thus $L_{=K}$ does **not** Turing-reduce to $L_{\geq K}$ either.
->
-> **Consequence:** Conclusion (i) ($L_{=K}$ is NP-hard) and Conclusion (iii) ($L_{\geq K}$ ↔ OPT via Turing equivalence) are both valid. But **this step**—the bridge from (i) to (ii)—is broken. Whether $L_{\geq K}$ (and equivalently CARD\_GAME\_OPT) is NP-hard remains an **open question** not settled by the current proof.
-
-***Conclusion ii: The score decision problem of the card game is NP-hard.***
+2. This does **not** directly imply anything about the "score ≥ K" decision problem or the optimization problem. $L_{=K}$ and $L_{\geq K}$ are two **distinct decision languages** that can produce **different answers on the same input** $(A, B, K)$: if the set of achievable scores is $\{0, 5, 10\}$ and $K = 3$, then $L_{\geq K}$ answers YES (since $10 \geq 3$) while $L_{=K}$ answers NO. Therefore, the NP-completeness of the "score = K" variant leaves the complexity class of the "score ≥ K" decision problem, and hence of the optimization problem, **open**. The only bridge established so far is the Turing equivalence between these last two problems (Conclusion iii below).
 
 ### Equivalence of Optimization Problem and Its Decision Problem (Turing Equivalence)
 
@@ -694,38 +676,12 @@ The "score maximization" optimization problem and its directly corresponding "�
 
 ***Conclusion iii: From a computational difficulty perspective, these two problems are equivalent. Proving the NP-hardness of the "score ≥ K" decision problem is equivalent to proving the NP-hardness of the original optimization problem.***
 
-> **[Annotation — Scope of the NP-hardness result]**
->
-> A clarification is warranted here regarding what has actually been proven versus what has not, as the chain "score=K variant is NP-hard ⇒ score≥K decision is NP-hard ⇒ the optimization problem is NP-hard" contains a gap that this document does not close.
->
-> What is rigorously established is that the **exact-equality decision variant** `CARD_GAME_DEC_EQ` ("does a strategy exist whose total score equals exactly K?") is NP-complete. Its reduction from Subset Sum (Section "NP-hardness Proof", Steps 1–3) is sound: under the gadget `A=[X], B=[X]+S`, the question "is K = 2X+T reachable?" is equivalent to "does some subset of S sum to T?", which is precisely Subset Sum.
->
-> However, **the NP-hardness of the optimization problem (and of the "score ≥ K" decision problem) is *not* proven by this reduction.** The reason lies in the gadget itself: under `A=[X], B=[X]+S`, the optimal score is *trivially computable* in polynomial time. Because the only matchable cards are the two copies of X, the player can always place the *entire* set S between them, yielding a score of `2X + sum(S)` — a closed-form value that depends on no subset-selection decision whatsoever. Consequently:
->
-> - The "score ≥ K" decision reduces to `sum(S) ≥ T`, a polynomial-time check, and thus provides no hardness.
-> - A Turing reduction from the `=K` variant to the optimization problem (via an oracle returning `max_score`) would, in principle, be the more promising route — but it *also* fails under this gadget, because the oracle degenerates to a plain summation and carries no information about which subsets are reachable. (This was the route attempted in the supplementary notes "多余的图灵归约.txt", which does not yield a valid proof for the same reason: its `MaxSubsetSum` oracle is, by the author's own marginal note, "just a summation", and the resulting greedy `SubsetSumSolver` is an unsound heuristic for Subset Sum.)
->
-> The deeper obstacle is structural: the game's cascading-match rule (each insertion may trigger a match that deletes a contiguous segment, reshaping A and altering all subsequent matches) makes constructing a **non-trivial gadget** — one whose optimal value genuinely encodes a subset-selection decision rather than being a closed-form constant — highly challenging. Any attempt to make the optimum encode Subset Sum must simultaneously ensure that the post-match residual state of A does not produce incidental matches that push the maximum score up to a trivial upper bound. No such construction has been found to date.
->
-> Therefore, the defensible scope of the result is:
->
-> - ✅ The exact-score decision variant `CARD_GAME_DEC_EQ` is NP-complete (proven).
-> - ❌ The optimization problem "maximize total score" being NP-hard is **not proven** in this document; it remains an open question, contingent on finding a non-trivial gadget.
->
-> This scope limitation does not undermine the rest of the document. The motivation for adopting an AI surrogate model does *not* depend on the NP-hardness of the optimization problem — it rests on the independently-measured decision-space scale (the Monte Carlo estimate of decision-path count and the static combinatorial upper bound), which holds regardless of the problem's worst-case complexity class. The headline claim that the game can be turned into an NP-complete problem is likewise supported by the proven `=K` variant.
->
-> The line below asserting the optimization problem is NP-hard should therefore be read as an aspirational statement whose proof is not provided here, rather than an established theorem.
-
-The core strategy of this card game, in its various forms, touches the theoretical upper limit of NP problems. Therefore, under the assumption that P≠NP, there exists no efficient (polynomial-time) algorithm to solve this problem.
-
-Thus our logical chain is: Variant decision problem is NP-hard → The decision problem corresponding to the optimization problem is NP-hard → The optimization problem is NP-hard
-
-**The generalized version of the card game score maximization problem is NP-Hard.**
+The exact-score decision variant `CARD_GAME_DEC_EQ` is NP-complete, which already illustrates the theoretical difficulty of precisely achieving a target score. In contrast, whether the optimization problem (and its "score ≥ K" decision version) is NP-hard remains an **open question**. Regardless of this open question, the combinatorial explosion of the decision space—quantified through the Monte Carlo estimate of decision-path counts and the static combinatorial upper bound—makes exact exhaustive search computationally infeasible at moderate scales, which motivates the surrogate modeling approach discussed below.
 
 ### Discussion on Algorithm Optimization / Proposal of Surrogate Modeling
 
 **Caching:**  
-The NP-hard nature of the problem leads to an extremely large decision space. We have already demonstrated that even for a small-scale instance with `length(A) = 6` and `length(B) = 3`, the decision space remains enormous. Consequently, caching techniques are difficult to apply effectively in implementation, as cache hits are exceedingly rare—a fact already confirmed through experimental validation.
+The combinatorial explosion of the decision space leads to an extremely large search space. We have already demonstrated that even for a small-scale instance with `length(A) = 6` and `length(B) = 3`, the decision space remains enormous. Consequently, caching techniques are difficult to apply effectively in implementation, as cache hits are exceedingly rare—a fact already confirmed through experimental validation.
 
 **Dynamic Programming (DP):**  
 The state of list A changes after every insertion, and the content of A itself is highly complex. This makes it challenging to identify overlapping subproblems, which are essential for dynamic programming. Moreover, the dynamic and intricate nature of A’s state renders it unsuitable as a key for DP state storage and retrieval. Therefore, dynamic programming is not applicable to this specific problem.
@@ -802,7 +758,7 @@ Dataset generation function:
 ```python
 generate_training_data(num_samples=10000)  
 ```
-(implementation available at [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/Get_trainingset.py#L15))
+(implementation available at [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Get_trainingset.py#L15))
 
 Here is a key point:
 
@@ -815,7 +771,7 @@ This trade-off must be evaluated based on the performance of models trained unde
 
 Therefore, we now assume by default that the dataset has undergone padding processing; specific analytical details will be discussed thoroughly in the AI model evaluation.
 
-Since A and B are randomly generated using the `deal_cards_tool`, the dataset needs to be deduplicated, which can be accomplished using Python's `set`. Subsequently, a detailed inspection of the data format, along with exception handling, is required ( [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/json/dedpu.py#L4) for details).
+Since A and B are randomly generated using the `deal_cards_tool`, the dataset needs to be deduplicated, which can be accomplished using Python's `set`. Subsequently, a detailed inspection of the data format, along with exception handling, is required ( [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/json/dedpu.py#L4) for details).
 
 Finally, we obtain the dataset for the genetic algorithm, named `data_GA.json`, containing 10,000 samples. Here is an example sample:
 
@@ -828,11 +784,11 @@ Finally, we obtain the dataset for the genetic algorithm, named `data_GA.json`, 
 }
 ```
 
-The dataset for the Transformer, `data_TR.json`, is generated and processed in the same way (see the code in `Get_trainingset_huge.py`[source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/Get_trainingset_huge.py)). However, due to its large size, multiprocessing is employed to accelerate data generation, and the resulting JSON files are subsequently converted to JSONL format to support streaming loading. The number of samples was initially set to 5 million before deduplication.
+The dataset for the Transformer, `data_TR.json`, is generated and processed in the same way (see the code in `Get_trainingset_huge.py`[source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Get_trainingset_huge.py)). However, due to its large size, multiprocessing is employed to accelerate data generation, and the resulting JSON files are subsequently converted to JSONL format to support streaming loading. The number of samples was initially set to 5 million before deduplication.
 
 ## 2.1 Implementation of the Genetic Algorithm
 
-The code implementation can be found at: [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py)
+The code implementation can be found at: [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/GA.py)
 
 ### Overview of the Genetic Algorithm Framework
 
@@ -909,7 +865,7 @@ In the game, each turn requires selecting one card from B and inserting it into 
 
 This makes `future_score` a crucial feature for lookahead planning.
 
-The other features are derived from the return values of `simulate_insertion_tool` ([source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py)). Although `match_found` and `removal_length` contain overlapping information, `match_found` was omitted as a feature to keep the model complexity manageable.
+The other features are derived from the return values of `simulate_insertion_tool` ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py)). Although `match_found` and `removal_length` contain overlapping information, `match_found` was omitted as a feature to keep the model complexity manageable.
 
 The heuristic function for computing `future_score` follows this logic:
 
@@ -918,7 +874,7 @@ When inserting a card from B into A, after this insertion is performed, the func
 1. If A and B have **no common elements**, then `future_score = 0`.  
 2. If there are **no remaining cards in B**, then `future_score = 0`.  
 3. If **only one card remains in B**, check whether this card shares any elements with A:  
-   - If yes, call `get_best_insertion_score` ([source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py)) to compute the best possible score from inserting that card, and use this as `future_score`.  
+   - If yes, call `get_best_insertion_score` ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py)) to compute the best possible score from inserting that card, and use this as `future_score`.  
    - If not, `future_score = 0`.
 
 This defines the future score estimation function:  
@@ -927,7 +883,7 @@ This defines the future score estimation function:
 # Core Function Documentation
 
 ## Strategy Generation Function
-[Source Code](https://github.com/tcita/python_server/blob/master/AI_algorithm/GA.py)
+[Source Code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/GA.py)
 ```python
 def GA_Strategy(genome, A, B):
     """
@@ -1119,7 +1075,7 @@ Initially, I attempted a more streamlined implementation of this Transformer tra
 
 ### Explanation of Key Functions
 
-[source code] (https://github.com/tcita/python_server/blob/master/AI_algorithm/Trans.py)
+[source code] (https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Trans.py)
 
 #### Data Preparation and Feature Engineering
 
@@ -1395,19 +1351,19 @@ Now that we have completed the training of both the **Genetic Algorithm (GA)** a
 
 I evaluate the two models as follows:
 
-The entire evaluation process is driven by the core function `Compare_TwoModel(model, other_model, rounds)` (implementation in [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/two_model_comparing.py#L130)), which can be broken down into the following key steps:
+The entire evaluation process is driven by the core function `Compare_TwoModel(model, other_model, rounds)` (implementation in [code_path](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/two_model_comparing.py#L130)), which can be broken down into the following key steps:
 
 ### 1. Initialization and Loop Testing
 
 - **Set test rounds**: The function receives a `rounds` parameter that determines how many independent tests to perform. Here, the number of tests is **20,000**.
-- **Loop to generate test cases**: In each iteration, a new set of test data `A` and `B` is generated through the `deal_cards_tool()` function (implementation in [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py#L125)). The data in each round is randomly independent, ensuring the generalization ability of the model evaluation.
+- **Loop to generate test cases**: In each iteration, a new set of test data `A` and `B` is generated through the `deal_cards_tool()` function (implementation in [code_path](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L125)). The data in each round is randomly independent, ensuring the generalization ability of the model evaluation.
 
 ### 2. Model Prediction and Performance Recording
 
 For each round of generated `A` and `B`:
 
 ### Call models to obtain strategies:
-- The `TestModel_with_given_A_B(model, A, B)` function (implementation in [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/two_model_comparing.py#L61)) is used separately to test the genome model and the Transformer model.
+- The `TestModel_with_given_A_B(model, A, B)` function (implementation in [code_path](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/two_model_comparing.py#L61)) is used separately to test the genome model and the Transformer model.
 - Inside this function, each model predicts the best three-step operation strategy `move` based on the current state of `A` and `B`. This `move` defines which card from `B` should be played first and at which position in `A` it should be inserted.
 
 ### Calculate true score:
@@ -1640,7 +1596,7 @@ This plot provides deeper bias analysis by dividing data into 5-point intervals 
 - **X-axis**: Represents mean bias
   - Negative values: Underestimation (predicted value < true value)
   - 0 value (red dashed line on right): No bias, the ideal state
-  - *Note: All biases with ground truth are negative because these are scores obtained using the insertion simulation function `simulate_insertion_tool` (code in [code_path](https://github.com/tcita/python_server/blob/master/AI_algorithm/tool/tool.py#L41)) based on model-predicted operations. This value must be ≤ theoretical optimal score, so algorithms can only underestimate scores, and x-axis values can only be non-positive.*
+  - *Note: All biases with ground truth are negative because these are scores obtained using the insertion simulation function `simulate_insertion_tool` (code in [code_path](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L41)) based on model-predicted operations. This value must be ≤ theoretical optimal score, so algorithms can only underestimate scores, and x-axis values can only be non-positive.*
 
 - **Y-axis**: True score intervals
 - **Bars**: Blue represents Algorithm 1 (GA) bias, green represents Algorithm 2 (Transformer) bias
@@ -1837,7 +1793,7 @@ This approach effectively utilizes hardware performance. Although the code is af
 ```python
 def Transformer_predict_batch_plus_GA(A_batch, B_batch, genomeforassist, TR_model, 
                                        num_a=6, num_b=3, device='cuda')
-(Implementation in https://github.com/tcita/python_server/blob/master/AI_algorithm/Trans.py#L737)
+(Implementation in https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Trans.py#L737)
 """
 Batch prediction using trained Transformer model (for A=6, B=3).
 
@@ -1857,7 +1813,7 @@ Returns:
 ## Timing Function
 
 ```python
-def execution_time()  (Implementation in https://github.com/tcita/python_server/blob/master/AI_algorithm/Trans.py#L1026)
+def execution_time()  (Implementation in https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Trans.py#L1026)
 ```
 
 Uses 20,000 `{A, B}` samples to test:
@@ -2001,7 +1957,7 @@ If we modify the model architecture, we can resolve order sensitivity. For examp
 
 I conducted several attempts based on these ideas. The main concept was to **transform the handling of the cards-to-be-played group (B cards) from an "ordered sequence" to an "unordered set"**.
 
-Model training code can be found at: [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/Enhanced_Trans.py)
+Model training code can be found at: [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/Enhanced_Trans.py)
 
 Subsequent testing proved that although it did solve the permutation invariance problem of group B (the future_score calculation no longer relied on "hard-coding" but instead used a more general dynamic greedy strategy), its accuracy decreased. It performed premature abstraction and information aggregation precisely when individual details needed to be preserved most, thereby losing critical signals necessary for making precise decisions. The previous Transformer's future_score was too idealistic and perfect, while the new hybrid model, in order to adapt to the new data, overlooked that the core of this task is not a pure set processing problem.
 
@@ -2023,7 +1979,7 @@ The server will exchange data with the Unity game (client). The client sends A a
 
 The web framework used here is Flask.
 
-Code implementation can be found at: [source code](https://github.com/tcita/python_server/blob/master/AI_algorithm/server.py)
+Code implementation can be found at: [source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/server.py)
 
 Then Docker is used to containerize the server. This packages it with its runtime environment, allowing it to run independently of the original development environment. After testing, the packaged server runs normally.
 
@@ -2240,7 +2196,7 @@ This is the hockey-stick identity (can be proven by continuously recursively exp
 
 **Q: Why is the scale of the special case so small?**
 
-**A:** The NP-hard proof of the problem, as well as time complexity analysis and search space scale analysis, all indicate that exhaustive search is infeasible at large scales. However, the workflow in this paper is feasible with very small-scale data. It's small enough to conveniently and accurately obtain training sets through exhaustive search, verify the accuracy of AI methods, and at this scale it's already large enough to study its characteristics and draw some conclusions. Therefore, in larger-scale situations, these workflows and conclusions also provide some replicable and verifiable ideas for reference.
+**A:** The time complexity analysis and search space scale analysis all indicate that exhaustive search is infeasible at large scales. However, the workflow in this paper is feasible with very small-scale data. It's small enough to conveniently and accurately obtain training sets through exhaustive search, verify the accuracy of AI methods, and at this scale it's already large enough to study its characteristics and draw some conclusions. Therefore, in larger-scale situations, these workflows and conclusions also provide some replicable and verifiable ideas for reference.
 
 **Q: What directions are there for further research?**
 
@@ -2252,9 +2208,9 @@ All implementation methods in this paper are based on supervised learning, which
 
 From an engineering perspective, we can also look at the client and take further mixing steps. Without using recursive exhaustive search with such time complexity, we can add a simple custom greedy strategy algorithm to the client. Because although the forward-looking nature of AI algorithms (such as future_score) and the Transformer's ability to capture correlations between elements have greatly improved MSE, it actually conflicts with the greedy strategy. In some cases, it may lower the minimum score of special cases due to being overly conservative. We can use this point to design algorithms and mix server strategies. The cost of greedy algorithms is extremely small, and I think this is a valuable engineering attempt.
 
-However, making good use of AI agent models, this heuristic method, to handle generalized NP problems is beyond what I can currently accomplish.
+However, making good use of AI agent models, this heuristic method, to handle generalized hard combinatorial problems is beyond what I can currently accomplish.
 
-This is my project's source code link: [**...**](https://github.com/tcita/python_server/)
+This is my project's source code link: [**...**](https://github.com/tcita/card-game-ai/)
 
 Because the Unity version control system is an invitation-only private system, I cannot directly make it public for everyone to access my Unity client project source files. Its architecture and demo screenshots have been described in detail in the main body of the text.
 

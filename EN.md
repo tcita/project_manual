@@ -67,7 +67,7 @@ This section presents the Unity client architecture and live gameplay demonstrat
 
 
 
-## Part I: Game Rules and Algorithmic Analysis
+# Part I: Game Rules and Algorithmic Analysis
 
 
 
@@ -811,7 +811,7 @@ When inserting a card from B into A, after this insertion is performed, the func
 This defines the future score estimation function:  
 **`calculate_future_score_default(A, remaining_B)`** ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/tool/tool.py#L279)).
 
-# Core Function Documentation
+### Core Function Documentation
 
 The GA implementation ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/GA.py)) consists of three core functions:
 
@@ -1321,7 +1321,7 @@ Here, **Algorithm 1** represents the Genetic Algorithm model and **Algorithm 2**
 
 Running the comparison function with **5,000 test rounds**, the following statistical data was obtained:
 
-# Statistical Data Comparison Analysis Table
+## Statistical Data Comparison Analysis Table
 
 **Test Configuration:** 20,000 test rounds  
 **Comparison Objects:** Algorithm 1 (GA) vs Algorithm 2 (Transformer) vs Ground Truth
@@ -1390,7 +1390,7 @@ From the experimental data, **Transformer (Algorithm 2)** significantly outperfo
 
 - In predicting **minimum scores**, both algorithms show certain deviations, with Transformer's minimum score bias reaching **-53**, larger than GA's **-42**. This may indicate that Transformer still needs improvement in extreme value prediction. However, both algorithms have **0 bias** for maximum score predictions, suggesting comparable performance in the high-score range.
 
-# Visualization Analysis and Ablation Study Results
+## Visualization Analysis and Ablation Study Results
 
 ## Figure 1 Analysis: Padding Strategy 
 
@@ -1588,7 +1588,7 @@ Similarly, let's examine the evaluation results of the current Transformer + GA 
 By observing the violin plot and bias bar chart, we can intuitively perceive the improvement in prediction accuracy of our ensemble model.
 
 
-# Ensemble Model Code Performance Optimization
+## Ensemble Model Code Performance Optimization
 
 Now, based on the above discussion, let's try to use the newly obtained Transformer + GA model to challenge the original exhaustive recursive algorithm in terms of running speed (we've already analyzed accuracy, and exhaustive recursion yields the ground truth).
 
@@ -1704,9 +1704,7 @@ $$48.7 + 63.1 = 111.8 \text{ seconds}$$
 
 This demonstrates that with proper optimization (batching and parallelization), the ensemble model can achieve both high accuracy and competitive runtime performance, making it practical for large-scale offline processing scenarios.
 
-# Analysis of Modeling Paradigm Conflicts and Inductive Biases in Transformers
-
-<!-- 语言还待打磨,可以更把Conflicts的原因讲的更清晰 -->
+## Analysis of Modeling Paradigm Conflicts and Inductive Biases in Transformers
 
 I attempted to include the `max_score` from the training set (i.e., the score corresponding to the optimal play strategy, which represents the highest possible score at that moment) in the training process, using A and B as inputs and `max_score` as the target. When examining solely the accuracy of the predicted `max_score`, the results were excellent. The difference between the model's predicted scores and the actual values was generally minimal.
 
@@ -1804,7 +1802,7 @@ From beginning to end, the model treats all input features (A and B) as a whole 
 
 
 
-## Part III: Server Development and Game Architecture
+# Part III: Server Development and Game Architecture
 
 In the game's PVE scenario, the strategy is real-time, and even with a lower-performance serial implementation, the AI's computation time per request is short enough (63/20000=0.00315s=3.15ms). Therefore, we continue to use the CPU-only serial GA+Transformer integrated model, as it is more suitable for building our game's local server.
 
@@ -1961,6 +1959,8 @@ It can no longer score, but the computer follows the strategy to insert the card
 Opening the server log, we can observe that the computer's actual card-playing strategy is consistent with the data sent and received by the server (the output above the highlighted part of the log is the fixed communication check when the server is initialized).
 
 
+
+# Part IV: Appendix, Author's Self-Reflection (Q&A), and Other Supplementary Materials
 
 ### Appendix:
 

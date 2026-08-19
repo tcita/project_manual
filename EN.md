@@ -350,7 +350,7 @@ To estimate **p** and locate the balance point, we adopt a **mean-field approxim
 
 We make two key assumptions:
 
-1. **Mean-field approximation**: In the large-system limit, the instantaneous matching probability can be approximated by its expected value, and this probability is proportional to the current length $ M $ of sequence A.
+1. **Mean-field approximation**: In the large-system limit, the instantaneous matching probability can be approximated by its expected value, and this probability is proportional to the current length **M** of sequence A.
 2. **Quasi-static approximation**: Since $y = |B|$ changes slowly (decreases by 1 per step), the system quickly equilibrates at each fixed **y**.
 
 Thus:
@@ -375,19 +375,19 @@ This implies that the typical length of the dynamic sequence **A** scales with t
 
 
 
-Since $ M_t = \Theta(\sqrt{n}) $ holds in typical cases, the total time complexity is:
+Since $M_t = \Theta(\sqrt{n})$ holds in typical cases, the total time complexity is:
 $$
 T = \sum_{t=1}^{n} O(M_t) \approx \sum_{t=1}^{n} O(\sqrt{n}) = O(n \cdot \sqrt{n}) = O(n^{3/2}).
 $$
 
-More precisely, if we treat $ M_t \approx \sqrt{n - t} $ as a continuous function, then:
+More precisely, if we treat $M_t \approx \sqrt{n - t}$ as a continuous function, then:
 $$
 T \approx \int_0^n \sqrt{t} \, dt = \frac{2}{3} n^{3/2} = \Theta(n^{3/2}).
 $$
 
-This model is primarily intended for analyzing the macroscopic statistical behavior of the system when $ M \gg 1 $. We assume that the probability of the system being completely emptied [i.e., $ M = 0 $ or $ M = 1 $] during execution is negligible. The validity of this assumption stems from the fact that the equilibrium point established by the negative feedback mechanism, $ M_{\text{eq}} \approx \sqrt{3y/c} $, decreases slowly as $ y $ diminishes, yet remains far from zero as long as $ y $ is still relatively large. Consequently, the system spends the vast majority of its time in states where $ M $ is sufficiently large. 
+This model is primarily intended for analyzing the macroscopic statistical behavior of the system when $M \gg 1$. We assume that the probability of the system being completely emptied [i.e., $M = 0$ or $M = 1$] during execution is negligible. The validity of this assumption stems from the fact that the equilibrium point established by the negative feedback mechanism, $M_{\text{eq}} \approx \sqrt{3y/c}$, decreases slowly as **y** diminishes, yet remains far from zero as long as **y** is still relatively large. Consequently, the system spends the vast majority of its time in states where **M** is sufficiently large. 
 
-Our analysis characterizes the system's behavior in this steady-state regime and does not precisely capture the dynamics near absorbing or reflecting boundaries at very small values of $ M $—for example, if all elements of $ A $ are completely eliminated after being matched by a subset of $ B $, then subsequent insertions of $ B $ would cause elements from $ B $ to match among themselves.
+Our analysis characterizes the system's behavior in this steady-state regime and does not precisely capture the dynamics near absorbing or reflecting boundaries at very small values of **M**—for example, if all elements of **A** are completely eliminated after being matched by a subset of **B**, then subsequent insertions of **B** would cause elements from **B** to match among themselves.
 
 
 
@@ -449,8 +449,8 @@ $$
 
 Now, we assign actual numeric values (from 1 to 13) to these placeholders:
 
-- Each of the 6 A-cards must have **distinct** values from 1 to 13, so the number of ways to assign values to A is the number of permutations: $ P(13,6) = \frac{13!}{(13-6)!} $.
-- Each of the 3 B-cards can take **any** value from 1 to 13, with repetitions allowed, giving $ 13^3 $ possible assignments.
+- Each of the 6 A-cards must have **distinct** values from 1 to 13, so the number of ways to assign values to A is the number of permutations: $P(13,6) = \frac{13!}{(13-6)!}$.
+- Each of the 3 B-cards can take **any** value from 1 to 13, with repetitions allowed, giving $13^3$ possible assignments.
 
 Therefore, the total number of possible final configurations (under the no-matching assumption) is:
 $$
@@ -462,7 +462,7 @@ Assuming each sample requires approximately 10 bytes of storage, the total data 
 > **Important Caveats**:  
 > This is only a rough estimate. As noted earlier, in the actual game, each insertion may trigger matching and removal, dynamically altering the length and content of A. Consequently, the state of A changes after each insertion, meaning that the order of insertions matters significantly.  
 >
-> For example, inserting $ b_1 $ at position 1 followed by $ b_2 $ at position 2 can yield a different outcome than inserting $ b_2 $ at position 2 first and then $ b_1 $ at position 1—due to intermediate matching effects. Thus, these are two distinct decision paths.  
+> For example, inserting **b_1** at position 1 followed by **b_2** at position 2 can yield a different outcome than inserting **b_2** at position 2 first and then **b_1** at position 1—due to intermediate matching effects. Thus, these are two distinct decision paths.  
 >
 > Moreover, our calculation assumes **no matches occur**, which also implies that some insertion sequences might be invalid in practice (e.g., attempting to insert at a position beyond the current length of A). Matching not only changes A’s length but also introduces complex state dependencies. It remains unclear whether matching ultimately increases or decreases the total number of feasible decision paths—but it certainly makes the true search space highly non-trivial and far more intricate than this static upper bound suggests.
 

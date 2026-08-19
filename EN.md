@@ -813,109 +813,11 @@ This defines the future score estimation function:
 
 # Core Function Documentation
 
-## Strategy Generation Function
-[Source Code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/GA.py)
-```python
-def GA_Strategy(genome, A, B):
-    """
-    Generate a card playing strategy based on genome and card sets A and B.
-    For each card in B, simulate all possible insertion positions in A, 
-    calculate 6 feature tensors, weight features using genome, 
-    and obtain evaluation value for each position.
-    Sort by evaluation value in descending order to generate final strategy.
-    
-    Args:
-        genome (list[float]): Weight genes of length 6, used for feature weighting.
-        A (list): Current hand cards or played card sequence.
-        B (list): List of candidate cards to be played.
-    
-    Returns:
-        list: Card playing strategy sorted by evaluation value.
-    """
-```
+The GA implementation ([source code](https://github.com/tcita/card-game-ai/blob/master/AI_algorithm/GA.py)) consists of three core functions:
 
-
-## Genome Evaluation Function
-
-```python
-def evaluate_genome(genome, num_rounds, seed_base):
-    """
-    Calls GA_Strategy function to complete the conversion from A, B and genome 
-    to corresponding specific strategy. We need to use the same batch of A, B 
-    for genome evaluation, so a fixed seed_base is required.
-    
-    Uses calculate_score_by_strategy function to calculate actual score of strategy,
-    evaluates multiple times, and takes average score as final evaluation result.
-    
-    Args:
-        genome (list[float]): Genome to be evaluated.
-        num_rounds (int): Number of evaluation rounds.
-        seed_base (int): Seed base for generating A and B.
-    
-    Returns:
-        float: Average evaluation score of the genome.
-    """
-```
-
-
-## Island Model Evolution Function
-
-```python
-def island_model_evolution(population, fitnesses, pop_size, tournament_size, 
-                          mutation_strength, num_rounds, islands, migration_rate,
-                          generation=0, max_generations=60):
-    """
-    1. Evenly distribute entire population across 3 islands
-    2. Each island evolves independently, calls evaluate_genome to calculate fitness,
-       preserves top 10% individuals with highest fitness in current island, 
-       directly entering next generation
-    3. Use tournament selection to select winner individuals, randomly select parents
-       among them, perform crossover and mutation to generate offspring, 
-       randomly select from these excellent offspring to replace individuals 
-       with low fitness in another island
-    
-    Args:
-        population: Current population (list)
-        fitnesses: Fitness values of current population (list)
-        pop_size: Total population size (int)
-        tournament_size: Tournament selection size (int)
-        mutation_strength: Mutation strength (float)
-        islands: Number of islands (int)
-        migration_rate: Migration rate (float)
-    
-    Returns:
-        new_population: Population of all islands after evolution (list)
-    """
-```
-
-
-## Training Parameters
-
-### Main Genetic Algorithm Function
-
-```python
-def genetic_algorithm(pop_size, generations, num_rounds, elitism_ratio, 
-                     tournament_size, evolution_methods,
-                     early_stop_generations, early_stop_threshold):
-    """
-    Main genetic algorithm function.
-    
-    Args:
-        pop_size: Population size
-        generations: Maximum number of generations
-        num_rounds: Number of rounds to evaluate each genome
-        elitism_ratio: Elite proportion
-        tournament_size: Tournament selection size
-        evolution_methods: List of available evolution methods
-        method_probs: Usage probability of each evolution method
-        early_stop_generations: Number of consecutive generations for early stopping
-        early_stop_threshold: Improvement threshold for early stopping
-    
-    Returns:
-        best_genome: Best genome
-    """
-```
-
+- **`GA_Strategy(genome, A, B)`** — For each card in B, simulates every insertion position in A, computes the six features, scores each position as the dot product of the (online-standardized) feature vector with the genome weights, and returns a strategy sorted by evaluation value.
+- **`evaluate_genome(genome, num_rounds, seed_base)`** — Plays `num_rounds` random games with a fixed seed base (so all genomes in a generation are compared on the same batch of A, B), applies the strategy via `GA_Strategy`, and returns the average score as fitness.
+- **`genetic_algorithm(...)`** — The main evolutionary loop: evaluates the population, applies early stopping, and builds the next generation via either `standard_evolution` (elitism + tournament selection + crossover + mutation) or `island_model_evolution` (3 independent islands that evolve separately and periodically exchange individuals via migration).
 
 ### Tested Parameters
 
